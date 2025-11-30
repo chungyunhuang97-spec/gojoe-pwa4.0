@@ -4,9 +4,12 @@ import react from '@vitejs/plugin-react'
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
-  // Load env file based on `mode` in the current working directory.
-  // Set the third parameter to '' to load all env regardless of the `VITE_` prefix.
-  const env = loadEnv(mode, '.', '');
+  // 1. Load env from .env files (local dev)
+  const loadedEnv = loadEnv(mode, process.cwd(), '');
+  
+  // 2. Merge with process.env (crucial for Zeabur/CI environments where .env might not exist)
+  // We prioritize process.env over loadedEnv to respect deployment settings
+  const env = { ...loadedEnv, ...process.env };
 
   return {
     plugins: [react()],
@@ -14,8 +17,8 @@ export default defineConfig(({ mode }) => {
       port: 3000
     },
     define: {
-      // Explicitly replace these variables with their string values during build
-      // This prevents "Cannot read properties of undefined" errors at runtime
+      // Force replace import.meta.env vars with static strings.
+      // This is the safest way to handle env vars in Vite to avoid runtime undefined errors.
       'import.meta.env.VITE_FIREBASE_API_KEY': JSON.stringify(env.VITE_FIREBASE_API_KEY || ''),
       'import.meta.env.VITE_FIREBASE_AUTH_DOMAIN': JSON.stringify(env.VITE_FIREBASE_AUTH_DOMAIN || ''),
       'import.meta.env.VITE_FIREBASE_PROJECT_ID': JSON.stringify(env.VITE_FIREBASE_PROJECT_ID || ''),
@@ -23,6 +26,9 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID': JSON.stringify(env.VITE_FIREBASE_MESSAGING_SENDER_ID || ''),
       'import.meta.env.VITE_FIREBASE_APP_ID': JSON.stringify(env.VITE_FIREBASE_APP_ID || ''),
       'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(env.VITE_GEMINI_API_KEY || ''),
+      
+      // Polyfill process.env to avoid crashes in some third-party libs
+      'process.env': {}
     }
   }
 })

@@ -1,10 +1,10 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { auth, googleProvider } from '../firebaseConfig';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
+import { auth, googleProvider, isFirebaseInitialized } from '../firebaseConfig';
+import { signInWithPopup, signInWithRedirect, signOut, onAuthStateChanged } from 'firebase/auth';
 import type { User } from 'firebase/auth';
 
-// --- Types ---
+// --- Types (Keep existing types) ---
 
 export interface UserProfile {
   height: number; // cm
@@ -223,13 +223,40 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Auth Actions
   const login = async () => {
+      if (!isFirebaseInitialized) {
+          alert("⚠️ 系統錯誤：Firebase 環境變數未設定，無法登入。\n請檢查 Zeabur 或本地環境變數配置。");
+          return;
+      }
+
       try {
+          console.log("嘗試使用 Popup 登入...");
           await signInWithPopup(auth, googleProvider);
       } catch (error: any) {
-          console.error("Login failed:", error);
-          let errorMessage = "登入失敗，請重試";
-          if (error.code === 'auth/popup-closed-by-user') errorMessage = "您關閉了登入視窗";
-          else if (error.code === 'auth/unauthorized-domain') errorMessage = "網域未授權";
+          console.error("Popup Login Failed:", error);
+          
+          // Fallback to Redirect if popup fails (common on mobile or restricted envs)
+          if (error.code === 'auth/popup-blocked' || error.code === 'auth/popup-closed-by-user' || error.message?.includes('cross-origin')) {
+              try {
+                  console.log("Popup failed, falling back to Redirect...");
+                  await signInWithRedirect(auth, googleProvider);
+                  return; // Redirect will reload page, no further alert needed
+              } catch (redirectError: any) {
+                  console.error("Redirect Login Failed:", redirectError);
+              }
+          }
+
+          // Error Handling
+          let errorMessage = `登入失敗 (${error.code || 'unknown'})`;
+          if (error.code === 'auth/unauthorized-domain') {
+             errorMessage = `網域未授權！\n請至 Firebase Console > Authentication > Settings > Authorized domains\n新增此網域: ${window.location.hostname}`;
+          } else if (error.code === 'auth/invalid-api-key') {
+             errorMessage = "Firebase API Key 無效。請檢查環境變數。";
+          } else if (error.code === 'auth/operation-not-allowed') {
+             errorMessage = "Google 登入功能未啟用。請至 Firebase Console > Sign-in method 開啟 Google 登入。";
+          } else if (error.message) {
+             errorMessage += `\n${error.message}`;
+          }
+          
           alert(errorMessage);
       }
   };

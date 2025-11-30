@@ -16,10 +16,10 @@ export const aiService = {
       console.warn("localStorage access failed:", e);
     }
 
-    // 2. Try Environment Variable (Standard Vite)
-    // Use import.meta.env safely
-    const env = import.meta.env.VITE_GEMINI_API_KEY;
-    if (env && typeof env === 'string' && env.length > 0) return env.trim();
+    // 2. Try Environment Variable
+    // import.meta.env is guaranteed by vite.config.ts
+    const env = import.meta.env || { VITE_GEMINI_API_KEY: "" };
+    if (env.VITE_GEMINI_API_KEY) return env.VITE_GEMINI_API_KEY;
 
     return "";
   },
