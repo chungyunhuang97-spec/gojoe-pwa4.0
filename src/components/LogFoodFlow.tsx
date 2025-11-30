@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ArrowUp, Camera, Check, Edit3, AlertTriangle, Search, MessageSquare, ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import { useUser, MealType } from '../context/UserContext';
 import { GoogleGenAI, Part, Content } from "@google/genai";
-import { aiService } from '../services/ai';
 
 interface LogFoodFlowProps {
   isOpen: boolean;
@@ -189,12 +188,22 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     setIsTyping(true);
 
     try {
-        const apiKey = aiService.getApiKey();
-        if (!apiKey) {
+        // 安全地讀取 API Key，添加多層檢查
+        let apiKey: string | null = null;
+        try {
+            apiKey = localStorage.getItem('gemini_api_key');
+        } catch (e) {
+            console.warn("localStorage 不可用:", e);
+        }
+
+        // Debug log (safe: not logging full key)
+        console.log("API Key Retrieval Status:", apiKey ? "Found (length: " + apiKey.length + ")" : "Not Found");
+
+        if (!apiKey || apiKey.trim() === '') {
             throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
         }
 
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
         
         // 1. Prepare History (Strictly formatted)
         const history = generateHistory();
@@ -234,7 +243,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         4. **正向激勵 (Positive Reinforcement)**：
            - 如果這餐營養素分配完美 (高蛋白、低脂)，請在結語加上：『✅ 漂亮！蛋白質達標且油脂控制完美，離目標身材更近一步！』
 
-        輸出格式 (JSON ONLY - 必須是有效的 JSON，不要包含任何 markdown 代碼塊)：
+        輸出格式 (JSON ONLY)：
         {
           "is_sufficient": boolean, // 若資訊太模糊 (如只說 "便當") 則為 false
           "missing_info_question": string | null, // 若 false，在此填寫追問問題
@@ -277,10 +286,8 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         const result = await chat.sendMessage({ message: messageParts });
         const rawText = result.text;
         
-        console.log('📥 Response:', rawText?.substring(0, 200) + '...');
-        
         // 5. Parse Response
-        if (!rawText) throw new Error("Gemini 返回空回應");
+        if (!rawText) throw new Error("Empty response");
         // Extract JSON if wrapped in markdown code blocks
         let jsonString = rawText;
         // Robust extraction: find first '{' and last '}'

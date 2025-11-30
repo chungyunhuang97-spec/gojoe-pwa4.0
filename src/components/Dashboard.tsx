@@ -6,7 +6,6 @@ import { NutritionOverview } from './NutritionOverview';
 import { BudgetCard } from './BudgetCard';
 import { CameraModal } from './CameraModal';
 import { GoogleGenAI } from "@google/genai";
-import { aiService } from '../services/ai';
 
 // --- Types & Helpers ---
 type TabType = 'status' | 'budget';
@@ -173,8 +172,18 @@ export const Dashboard: React.FC = () => {
       else addUserMessage(currentInput);
 
       try {
-          const apiKey = aiService.getApiKey();
-          if (!apiKey) {
+          // 安全地讀取 API Key，添加多層檢查
+          let apiKey: string | null = null;
+          try {
+              apiKey = localStorage.getItem('gemini_api_key');
+          } catch (e) {
+              console.warn("localStorage 不可用:", e);
+          }
+
+          // Debug log (safe: not logging full key)
+          console.log("API Key Retrieval Status:", apiKey ? "Found (length: " + apiKey.length + ")" : "Not Found");
+
+          if (!apiKey || apiKey.trim() === '') {
              throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
           }
 
@@ -275,11 +284,19 @@ export const Dashboard: React.FC = () => {
           setIsTyping(false);
           
           let errorMsg = error.message || JSON.stringify(error);
-          if (error.message?.includes('400')) errorMsg = "請求格式錯誤 (400)。";
-          if (error.message?.includes('403')) errorMsg = "權限不足 (403)：請檢查 API Key 是否正確。";
-          if (error.message?.includes('429')) errorMsg = "請求過多 (429)：請稍後再試。";
+          if (error.message?.includes('API key not valid')) {
+              errorMsg = "❌ API Key 無效：請檢查您輸入的 Key 是否正確（不能有空格）。";
+          } else if (error.message?.includes('JSON')) {
+              errorMsg = "❌ 回應解析錯誤：AI 回傳的格式異常，請重試。";
+          } else if (error.message?.includes('403') || error.message?.includes('permission denied')) {
+              errorMsg = "❌ 權限不足 (403)：您的 API Key 可能沒有權限或已過期。";
+          } else if (error.message?.includes('429')) {
+              errorMsg = "❌ 請求過於頻繁 (429)：請稍候後再試。";
+          } else if (!navigator.onLine) {
+              errorMsg = "❌ 網路錯誤：請檢查您的網路連線。";
+          }
           
-          addAiMessage(`❌ AI 分析錯誤: ${errorMsg}\n\n請檢查您的 API Key 設定 (於選單中設定)。`);
+          addAiMessage(`AI 分析發生錯誤: ${errorMsg}`);
       }
   };
 
