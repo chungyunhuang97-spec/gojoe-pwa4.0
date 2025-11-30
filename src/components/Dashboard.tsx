@@ -6,6 +6,7 @@ import { NutritionOverview } from './NutritionOverview';
 import { BudgetCard } from './BudgetCard';
 import { CameraModal } from './CameraModal';
 import { GoogleGenAI } from "@google/genai";
+import { aiService } from '../services/ai';
 
 // --- Types & Helpers ---
 type TabType = 'status' | 'budget';
@@ -282,7 +283,7 @@ export const Dashboard: React.FC = () => {
           setIsTyping(false);
           
           let errorMsg = error.message || JSON.stringify(error);
-          if (error.message?.includes('API key not valid')) {
+          if (error.message?.includes('API key not valid') || error.message?.includes('403')) {
               errorMsg = "API Key 無效或過期。請至「API Key 設定」重新輸入。";
           } else if (error.message?.includes('429')) {
               errorMsg = "請求過於頻繁，請稍候再試。";
@@ -290,7 +291,7 @@ export const Dashboard: React.FC = () => {
               errorMsg = "AI 回傳格式錯誤，請再試一次。";
           }
           
-          addAiMessage(`分析錯誤: ${errorMsg}`);
+          addAiMessage(`AI 分析發生錯誤: ${errorMsg}`);
       }
   };
 

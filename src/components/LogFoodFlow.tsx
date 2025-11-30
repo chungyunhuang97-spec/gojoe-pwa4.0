@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ArrowUp, Camera, Check, Edit3, AlertTriangle, Search, MessageSquare, ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import { useUser, MealType } from '../context/UserContext';
 import { GoogleGenAI, Part, Content } from "@google/genai";
+import { aiService } from '../services/ai';
 
 interface LogFoodFlowProps {
   isOpen: boolean;
@@ -188,7 +189,20 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     setIsTyping(true);
 
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        // 安全地讀取 API Key，添加多層檢查
+        let apiKey: string | null = null;
+        
+        try {
+            apiKey = localStorage.getItem('gemini_api_key');
+        } catch (e) {
+            console.warn("localStorage 不可用:", e);
+        }
+
+        if (!apiKey || apiKey.trim() === '') {
+            throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
+        }
+
+        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
         
         // 1. Prepare History (Strictly formatted)
         const history = generateHistory();
