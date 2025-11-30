@@ -1,0 +1,16 @@
+{
+  "name": "Go Joe! - Budget & Calorie Tracker",
+  "short_name": "Go Joe!",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#F5F5F5",
+  "theme_color": "#ffffff",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/2928/2928158.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
