@@ -173,16 +173,8 @@ export const Dashboard: React.FC = () => {
       else addUserMessage(currentInput);
 
       try {
-          // 安全地讀取 API Key，添加多層檢查
-          let apiKey: string | null = null;
-          
-          try {
-              apiKey = localStorage.getItem('gemini_api_key');
-          } catch (e) {
-              console.warn("localStorage 不可用:", e);
-          }
-
-          if (!apiKey || apiKey.trim() === '') {
+          const apiKey = aiService.getApiKey();
+          if (!apiKey) {
              throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
           }
 
@@ -283,15 +275,11 @@ export const Dashboard: React.FC = () => {
           setIsTyping(false);
           
           let errorMsg = error.message || JSON.stringify(error);
-          if (error.message?.includes('API key not valid') || error.message?.includes('403')) {
-              errorMsg = "API Key 無效或過期。請至「API Key 設定」重新輸入。";
-          } else if (error.message?.includes('429')) {
-              errorMsg = "請求過於頻繁，請稍候再試。";
-          } else if (error.message?.includes('JSON')) {
-              errorMsg = "AI 回傳格式錯誤，請再試一次。";
-          }
+          if (error.message?.includes('400')) errorMsg = "請求格式錯誤 (400)。";
+          if (error.message?.includes('403')) errorMsg = "權限不足 (403)：請檢查 API Key 是否正確。";
+          if (error.message?.includes('429')) errorMsg = "請求過多 (429)：請稍後再試。";
           
-          addAiMessage(`AI 分析發生錯誤: ${errorMsg}`);
+          addAiMessage(`❌ AI 分析錯誤: ${errorMsg}\n\n請檢查您的 API Key 設定 (於選單中設定)。`);
       }
   };
 

@@ -72,14 +72,18 @@ const MainApp: React.FC = () => {
   // Check for API Key on mount using the new service
   useEffect(() => {
     const checkKey = async () => {
-      // 1. Check local/env key presence via service
-      if (aiService.hasApiKey()) {
+      // 1. Check strictly for user-provided key in localStorage
+      // This ensures we don't auto-login with a stale environment variable key
+      // if the goal is to force user to provide their own.
+      if (aiService.isUserKeySet()) {
         setHasApiKey(true);
       } 
-      // 2. Check OAuth flow
+      // 2. Check OAuth flow (fallback)
       else if ((window as any).aistudio && await (window as any).aistudio.hasSelectedApiKey()) {
         setHasApiKey(true);
       }
+      // Note: We intentionally do NOT check import.meta.env here if we want to FORCE user input.
+      // If you want to allow environment variable as a fallback, change this logic.
     };
     checkKey();
   }, []);
@@ -88,7 +92,7 @@ const MainApp: React.FC = () => {
 
   if (!user) return <Login />;
 
-  // API Key Gate
+  // API Key Gate - Force setup if no user key found
   if (!hasApiKey && currentView !== 'apikey') {
     return <ApiKeySetup onComplete={() => setHasApiKey(true)} />;
   }

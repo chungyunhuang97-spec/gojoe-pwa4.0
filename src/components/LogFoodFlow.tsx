@@ -189,20 +189,12 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     setIsTyping(true);
 
     try {
-        // 安全地讀取 API Key，添加多層檢查
-        let apiKey: string | null = null;
-        
-        try {
-            apiKey = localStorage.getItem('gemini_api_key');
-        } catch (e) {
-            console.warn("localStorage 不可用:", e);
-        }
-
-        if (!apiKey || apiKey.trim() === '') {
+        const apiKey = aiService.getApiKey();
+        if (!apiKey) {
             throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
         }
 
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+        const ai = new GoogleGenAI({ apiKey });
         
         // 1. Prepare History (Strictly formatted)
         const history = generateHistory();
@@ -338,7 +330,21 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
             fullError: error
         });
         setIsTyping(false);
-        addErrorMessage(`分析錯誤: ${error.message || '未知錯誤'}`);
+        
+        let errorMsg = error.message || JSON.stringify(error);
+        if (error.message?.includes('API key not valid')) {
+            errorMsg = "❌ API Key 無效：請檢查您輸入的 Key 是否正確（不能有空格）。";
+        } else if (error.message?.includes('JSON')) {
+            errorMsg = "❌ 回應解析錯誤：AI 回傳的格式異常，請重試。";
+        } else if (error.message?.includes('403') || error.message?.includes('permission denied')) {
+            errorMsg = "❌ 權限不足 (403)：您的 API Key 可能沒有權限或已過期。";
+        } else if (error.message?.includes('429')) {
+            errorMsg = "❌ 請求過於頻繁 (429)：請稍候後再試。";
+        } else if (!navigator.onLine) {
+            errorMsg = "❌ 網路錯誤：請檢查您的網路連線。";
+        }
+        
+        addErrorMessage(`分析錯誤: ${errorMsg}`);
     }
   };
 

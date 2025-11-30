@@ -33,6 +33,19 @@ export const aiService = {
   },
 
   /**
+   * 檢查用戶是否已手動設定 Key (僅檢查 localStorage)
+   * 用於首次登入強制引導
+   */
+  isUserKeySet: (): boolean => {
+    try {
+      const local = localStorage.getItem(STORAGE_KEY);
+      return !!local && local.trim().startsWith('AIza');
+    } catch (e) {
+      return false;
+    }
+  },
+
+  /**
    * 儲存 API Key 到 LocalStorage
    */
   saveApiKey: (key: string) => {
