@@ -11,9 +11,7 @@ import {
 import { 
   doc, 
   setDoc, 
-  updateDoc, 
-  onSnapshot, 
-  getDoc 
+  onSnapshot
 } from 'firebase/firestore';
 
 // --- Types ---
@@ -101,7 +99,8 @@ export interface DailyStats {
 }
 
 export interface UserState {
-  user: User | null; // Firebase Auth User
+  user: User | null; // Firebase Auth User (or Mock for Guest)
+  isGuest: boolean;
   authLoading: boolean;
   hasCompletedOnboarding: boolean;
   profile: UserProfile;
@@ -117,6 +116,7 @@ export interface UserState {
 export interface UserContextType extends UserState {
   login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
+  loginAsGuest: () => void;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -172,6 +172,7 @@ const DEFAULT_STATS: DailyStats = {
 
 const DEFAULT_STATE: UserState = {
   user: null,
+  isGuest: false,
   authLoading: true,
   hasCompletedOnboarding: false,
   profile: DEFAULT_PROFILE,
@@ -215,7 +216,26 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 1. Auth & Data Listener
   useEffect(() => {
-    // If not initialized, stop loading and return
+    // Guest Mode Check (LocalStorage Persistence)
+    const guestData = localStorage.getItem('gojoe_guest_data');
+    if (guestData && !state.user) {
+        try {
+            const parsed = JSON.parse(guestData);
+            setState(prev => ({
+                ...prev,
+                ...parsed,
+                user: { uid: 'guest', email: 'guest@gojoe.app' } as User,
+                isGuest: true,
+                authLoading: false,
+                todayStats: calculateTodayStats(parsed.logs || [])
+            }));
+            return;
+        } catch (e) {
+            console.error("Failed to load guest data", e);
+        }
+    }
+
+    // Normal Firebase Flow
     if (!isFirebaseInitialized) {
         setState(prev => ({ ...prev, authLoading: false }));
         return;
@@ -234,9 +254,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     setState(prev => ({
                         ...prev,
                         user: currentUser,
+                        isGuest: false,
                         authLoading: false,
                         ...userData,
-                        // Ensure defaults
                         profile: userData.profile || DEFAULT_PROFILE,
                         goals: userData.goals || DEFAULT_GOALS,
                         logs: userData.logs || [],
@@ -245,19 +265,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         todayStats: calculateTodayStats(userData.logs || [])
                     }));
                 } else {
-                    // New user in Auth but no data in Firestore yet (rare, but handled)
-                    setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
+                    setState(prev => ({ ...prev, user: currentUser, isGuest: false, authLoading: false }));
                 }
             }, (error) => {
                 console.error("Firestore Listen Error:", error);
-                // Still allow access even if DB read fails, might be just connection
                 setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
             });
 
         } else {
-            // User Logged Out
+            // User Logged Out (and not guest)
             if (unsubscribeFirestore) unsubscribeFirestore();
-            setState(prev => ({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized }));
+            if (!state.isGuest) {
+                setState(prev => ({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized }));
+            }
         }
     });
 
@@ -267,12 +287,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  // --- Helper to save to Firestore ---
-  const saveToFirestore = async (updates: Partial<UserState>) => {
+  // --- Unified Data Saving ---
+  const saveData = async (updates: Partial<UserState>) => {
+      // 1. Guest Mode: Save to LocalStorage
+      if (state.isGuest) {
+          const newState = { ...state, ...updates };
+          // Don't save transient session flags or user object
+          const { user, isGuest, authLoading, isFirebaseReady, todayStats, ...storageData } = newState;
+          localStorage.setItem('gojoe_guest_data', JSON.stringify(storageData));
+          
+          // Update Local State immediately
+          setState(prev => ({
+              ...prev,
+              ...updates,
+              todayStats: updates.logs ? calculateTodayStats(updates.logs) : prev.todayStats
+          }));
+          return;
+      }
+
+      // 2. User Mode: Save to Firestore
       if (!state.user) return;
       try {
           const userDocRef = doc(db, "users", state.user.uid);
           await setDoc(userDocRef, updates, { merge: true });
+          // Note: Firestore listener will auto-update state
       } catch (e) {
           console.error("Error saving to Firestore:", e);
       }
@@ -280,16 +318,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Auth Actions ---
   const login = async (email: string, pass: string) => {
-      if (!isFirebaseInitialized) throw new Error("Firebase not initialized");
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
       await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const signup = async (email: string, pass: string) => {
-      if (!isFirebaseInitialized) throw new Error("Firebase not initialized");
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
       
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       
-      // Initialize User Data
       try {
           const userDocRef = doc(db, "users", cred.user.uid);
           await setDoc(userDocRef, {
@@ -303,24 +340,50 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
       } catch (e) {
           console.error("Error initializing user data:", e);
-          // Don't throw here, allow login to proceed even if DB init fails (listener will handle empty state)
       }
   };
 
-  const logout = async () => {
-      if (auth) await signOut(auth);
+  const loginAsGuest = () => {
+      const guestState = {
+          profile: DEFAULT_PROFILE,
+          goals: DEFAULT_GOALS,
+          logs: [],
+          bodyLogs: [],
+          workoutLogs: [],
+          hasCompletedOnboarding: false,
+          trainingMode: 'rest' as TrainingMode
+      };
+      
+      localStorage.setItem('gojoe_guest_data', JSON.stringify(guestState));
+      
+      setState(prev => ({
+          ...prev,
+          user: { uid: 'guest', email: 'guest@gojoe.app' } as User,
+          isGuest: true,
+          authLoading: false, 
+          ...guestState
+      }));
   };
 
-  // --- Data Actions ---
+  const logout = async () => {
+      if (state.isGuest) {
+          localStorage.removeItem('gojoe_guest_data');
+          setState({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized });
+      } else {
+          if (auth) await signOut(auth);
+      }
+  };
+
+  // --- Data Actions (Refactored to use saveData) ---
 
   const updateProfile = (updates: Partial<UserProfile>) => {
     const newProfile = { ...state.profile, ...updates };
-    saveToFirestore({ profile: newProfile });
+    saveData({ profile: newProfile });
   };
 
   const updateGoals = (updates: Partial<UserGoals>) => {
     const newGoals = { ...state.goals, ...updates };
-    saveToFirestore({ goals: newGoals });
+    saveData({ goals: newGoals });
   };
 
   const addLog = (logData: Omit<LogEntry, 'id' | 'timestamp'>) => {
@@ -330,17 +393,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: Date.now(),
     };
     const newLogs = [...state.logs, newLog];
-    saveToFirestore({ logs: newLogs });
+    saveData({ logs: newLogs });
   };
 
   const updateLog = (updatedLog: LogEntry) => {
     const newLogs = state.logs.map(log => log.id === updatedLog.id ? updatedLog : log);
-    saveToFirestore({ logs: newLogs });
+    saveData({ logs: newLogs });
   };
 
   const deleteLog = (id: string) => {
     const newLogs = state.logs.filter(log => log.id !== id);
-    saveToFirestore({ logs: newLogs });
+    saveData({ logs: newLogs });
   };
 
   const addBodyLog = (logData: Omit<BodyLogEntry, 'id' | 'timestamp'>) => {
@@ -354,12 +417,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ? { ...state.profile, weight: logData.weight } 
         : state.profile;
         
-    saveToFirestore({ bodyLogs: newBodyLogs, profile: newProfile });
+    saveData({ bodyLogs: newBodyLogs, profile: newProfile });
   };
 
   const deleteBodyLog = (id: string) => {
     const newBodyLogs = state.bodyLogs.filter(log => log.id !== id);
-    saveToFirestore({ bodyLogs: newBodyLogs });
+    saveData({ bodyLogs: newBodyLogs });
   };
 
   const addWorkoutLog = (logData: Omit<WorkoutLog, 'id' | 'timestamp'>) => {
@@ -368,17 +431,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
-    saveToFirestore({ workoutLogs: [...state.workoutLogs, newLog] });
+    saveData({ workoutLogs: [...state.workoutLogs, newLog] });
   };
 
   const updateWorkoutLog = (id: string, updates: Partial<WorkoutLog>) => {
     const newLogs = state.workoutLogs.map(log => log.id === id ? { ...log, ...updates } : log);
-    saveToFirestore({ workoutLogs: newLogs });
+    saveData({ workoutLogs: newLogs });
   };
 
   const deleteWorkoutLog = (id: string) => {
     const newLogs = state.workoutLogs.filter(log => log.id !== id);
-    saveToFirestore({ workoutLogs: newLogs });
+    saveData({ workoutLogs: newLogs });
   };
 
   const getWorkoutLogByDate = (date: string) => {
@@ -386,11 +449,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeOnboarding = () => {
-    saveToFirestore({ hasCompletedOnboarding: true });
+    saveData({ hasCompletedOnboarding: true });
   };
 
   const resetData = () => {
-      saveToFirestore({
+      saveData({
           hasCompletedOnboarding: false,
           logs: [],
           bodyLogs: [],
@@ -427,14 +490,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setTrainingMode = (mode: TrainingMode) => {
-      saveToFirestore({ trainingMode: mode });
+      saveData({ trainingMode: mode });
       recalculateTargets(state.profile, mode);
   };
 
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      login, signup, logout, updateProfile, updateGoals, 
+      login, signup, loginAsGuest, logout, updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,
       addWorkoutLog, updateWorkoutLog, deleteWorkoutLog, getWorkoutLogByDate,

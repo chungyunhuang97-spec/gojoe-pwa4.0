@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser, UserProfile, UserGoals } from '../context/UserContext';
-import { User, Ruler, Weight, Target, Wallet, LogOut, ChevronRight, Settings, Calculator, X, Save, Camera, Edit2 } from 'lucide-react';
+import { User, Ruler, Weight, Target, Wallet, LogOut, ChevronRight, Settings, Calculator, X, Save, Camera, Edit2, AlertTriangle } from 'lucide-react';
 
 export const Profile: React.FC = () => {
-  const { profile, goals, resetData, updateGoals, updateProfile, recalculateTargets } = useUser();
+  const { profile, goals, resetData, updateGoals, updateProfile, recalculateTargets, isGuest, logout } = useUser();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [tempBudget, setTempBudget] = useState(goals.budget.daily);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +147,9 @@ export const Profile: React.FC = () => {
             className="hidden" 
         />
 
-        <h2 className="text-2xl font-black text-gray-800">使用者</h2>
+        <h2 className="text-2xl font-black text-gray-800">
+            {isGuest ? "訪客 (Guest)" : "使用者"}
+        </h2>
         
         {isEditing ? (
              <div className="flex gap-2 mt-2">
@@ -173,6 +175,19 @@ export const Profile: React.FC = () => {
             </span>
         )}
       </div>
+
+      {/* Guest Mode Warning */}
+      {isGuest && (
+          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl flex items-start gap-3">
+              <AlertTriangle className="text-yellow-600 shrink-0" size={20} />
+              <div>
+                  <h4 className="font-bold text-yellow-800 text-sm">訪客模式</h4>
+                  <p className="text-xs text-yellow-700 mt-1">
+                      您的資料僅儲存在此瀏覽器中。若清除快取，資料將會遺失。請盡快註冊以同步資料。
+                  </p>
+              </div>
+          </div>
+      )}
 
       {/* Goal Status Card (Updated Grid Layout) */}
       <div className="bg-white border border-gray-100 rounded-[2rem] p-6 relative overflow-hidden shadow-lg">
@@ -300,27 +315,38 @@ export const Profile: React.FC = () => {
              <Settings size={20} className="text-gray-300" />
          </button>
 
-         <button 
-            onClick={() => {
-                if(window.confirm('確定要重置所有數據並重新設定嗎？此動作無法復原。')) {
-                    resetData();
-                }
-            }}
-            className="w-full flex items-center justify-between p-5 bg-red-50/50 rounded-[1.5rem] active:scale-95 transition-transform group hover:bg-red-50 border border-red-100/50"
-         >
-             <div className="flex items-center gap-4">
-                 <div className="p-3 bg-white rounded-full text-red-400 group-hover:text-red-500 transition-colors shadow-sm">
-                     <LogOut size={20} />
-                 </div>
-                 <span className="block font-bold text-red-400 group-hover:text-red-500 transition-colors">重置並重新設定</span>
+         {isGuest && (
+             <div className="p-4 text-center">
+                 <p className="text-xs text-gray-400 mb-2">想要雲端備份資料？</p>
+                 <button onClick={logout} className="text-brand-green font-bold text-sm bg-brand-black px-4 py-2 rounded-full">
+                     登出並註冊帳號
+                 </button>
              </div>
-             <ChevronRight size={20} className="text-red-200" />
-         </button>
+         )}
+
+         {!isGuest && (
+            <button 
+                onClick={() => {
+                    if(window.confirm('確定要重置所有數據並重新設定嗎？此動作無法復原。')) {
+                        resetData();
+                    }
+                }}
+                className="w-full flex items-center justify-between p-5 bg-red-50/50 rounded-[1.5rem] active:scale-95 transition-transform group hover:bg-red-50 border border-red-100/50"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-white rounded-full text-red-400 group-hover:text-red-500 transition-colors shadow-sm">
+                        <LogOut size={20} />
+                    </div>
+                    <span className="block font-bold text-red-400 group-hover:text-red-500 transition-colors">重置並重新設定</span>
+                </div>
+                <ChevronRight size={20} className="text-red-200" />
+            </button>
+         )}
       </div>
 
       {/* Footer Version */}
       <div className="text-center pb-24">
-          <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Go Joe! v1.1.0</p>
+          <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Go Joe! v1.3.0</p>
       </div>
 
       {/* Budget Edit Modal (Local) */}

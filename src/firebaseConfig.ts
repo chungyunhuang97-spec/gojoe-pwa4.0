@@ -16,13 +16,23 @@ const getEnv = (key: string) => {
   return "";
 };
 
+// 1. Try to get manual config from LocalStorage (Fallback for Preview Environments)
+let manualConfig: any = {};
+try {
+    const stored = localStorage.getItem('firebase_manual_config');
+    if (stored) manualConfig = JSON.parse(stored);
+} catch (e) {
+    console.warn("Failed to load manual config", e);
+}
+
+// 2. Prioritize Environment Variables, then Manual Config
 const config = {
-  apiKey: getEnv('VITE_FIREBASE_API_KEY'),
-  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN'),
-  projectId: getEnv('VITE_FIREBASE_PROJECT_ID'),
-  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET'),
-  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
-  appId: getEnv('VITE_FIREBASE_APP_ID')
+  apiKey: getEnv('VITE_FIREBASE_API_KEY') || manualConfig.apiKey,
+  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN') || manualConfig.authDomain,
+  projectId: getEnv('VITE_FIREBASE_PROJECT_ID') || manualConfig.projectId,
+  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET') || manualConfig.storageBucket,
+  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || manualConfig.messagingSenderId,
+  appId: getEnv('VITE_FIREBASE_APP_ID') || manualConfig.appId
 };
 
 let app;
@@ -32,8 +42,23 @@ let db: any;
 let googleProvider: any;
 let isFirebaseInitialized = false;
 
+// Helper to save manual config from UI
+export const saveManualConfig = (newConfig: any) => {
+    try {
+        localStorage.setItem('firebase_manual_config', JSON.stringify(newConfig));
+        window.location.reload(); // Reload to apply
+    } catch (e) {
+        console.error("Failed to save config", e);
+    }
+};
+
+export const clearManualConfig = () => {
+    localStorage.removeItem('firebase_manual_config');
+    window.location.reload();
+};
+
 try {
-    // Validation: If apiKey is empty (from fallback), throw error
+    // Validation: If apiKey is empty, throw error
     if (!config.apiKey || config.apiKey === '') {
         throw new Error("Firebase API Key is empty.");
     }
