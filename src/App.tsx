@@ -10,7 +10,6 @@ import { Training } from './components/Training';
 import { Analytics } from './components/Analytics';
 import { UserProvider, useUser } from './context/UserContext';
 import { Menu, User, X, ChevronRight, Settings, LogOut, History as HistoryIcon, Home, Key, Dumbbell, BarChart3 } from 'lucide-react';
-import { aiService } from './services/ai';
 
 type ViewType = 'dashboard' | 'history' | 'profile' | 'settings' | 'apikey' | 'training' | 'analytics';
 
@@ -69,21 +68,18 @@ const MainApp: React.FC = () => {
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [hasApiKey, setHasApiKey] = useState(false);
 
-  // Check for API Key on mount using the new service
+  // Check for API Key on mount (LocalStorage OR Injected)
   useEffect(() => {
     const checkKey = async () => {
-      // 1. Check strictly for user-provided key in localStorage
-      // This ensures we don't auto-login with a stale environment variable key
-      // if the goal is to force user to provide their own.
-      if (aiService.isUserKeySet()) {
+      const storedKey = localStorage.getItem('gemini_api_key');
+      const envKey = process.env.API_KEY;
+      
+      // If we have a stored key OR if the environment has one injected
+      if (storedKey || (envKey && envKey.length > 10)) {
         setHasApiKey(true);
-      } 
-      // 2. Check OAuth flow (fallback)
-      else if ((window as any).aistudio && await (window as any).aistudio.hasSelectedApiKey()) {
+      } else if ((window as any).aistudio && await (window as any).aistudio.hasSelectedApiKey()) {
         setHasApiKey(true);
       }
-      // Note: We intentionally do NOT check import.meta.env here if we want to FORCE user input.
-      // If you want to allow environment variable as a fallback, change this logic.
     };
     checkKey();
   }, []);
@@ -92,7 +88,8 @@ const MainApp: React.FC = () => {
 
   if (!user) return <Login />;
 
-  // API Key Gate - Force setup if no user key found
+  // API Key Gate - Must happen before accessing app features
+  // Exception: If user wants to configure API key explicitly (e.g. they cleared it), we show the setup
   if (!hasApiKey && currentView !== 'apikey') {
     return <ApiKeySetup onComplete={() => setHasApiKey(true)} />;
   }

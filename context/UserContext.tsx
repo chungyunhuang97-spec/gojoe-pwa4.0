@@ -1,8 +1,20 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { auth, googleProvider } from '../src/firebaseConfig';
-import { signInWithPopup, signOut, onAuthStateChanged } from 'firebase/auth';
-import type { User } from 'firebase/auth';
+import { auth, db, isFirebaseInitialized } from '../src/firebaseConfig';
+import { 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  User 
+} from 'firebase/auth';
+import { 
+  doc, 
+  setDoc, 
+  updateDoc, 
+  onSnapshot, 
+  getDoc 
+} from 'firebase/firestore';
 
 // --- Types ---
 
@@ -58,7 +70,6 @@ export interface BodyLogEntry {
   timestamp: number;
 }
 
-// --- NEW WORKOUT TYPES ---
 export interface WorkoutExercise {
   id: string;
   name: string;
@@ -99,11 +110,12 @@ export interface UserState {
   todayStats: DailyStats;
   logs: LogEntry[];
   bodyLogs: BodyLogEntry[];
-  workoutLogs: WorkoutLog[]; // Added
+  workoutLogs: WorkoutLog[];
 }
 
 export interface UserContextType extends UserState {
-  login: () => Promise<void>;
+  login: (email: string, pass: string) => Promise<void>;
+  signup: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -113,12 +125,10 @@ export interface UserContextType extends UserState {
   deleteLog: (id: string) => void;
   addBodyLog: (log: Omit<BodyLogEntry, 'id' | 'timestamp'>) => void;
   deleteBodyLog: (id: string) => void;
-  // Workout Methods
   addWorkoutLog: (log: Omit<WorkoutLog, 'id' | 'timestamp'>) => void;
   updateWorkoutLog: (id: string, log: Partial<WorkoutLog>) => void;
   deleteWorkoutLog: (id: string) => void;
   getWorkoutLogByDate: (date: string) => WorkoutLog | undefined;
-  
   completeOnboarding: () => void;
   resetData: () => void;
   recalculateTargets: (newProfile: UserProfile, mode?: TrainingMode) => void;
@@ -172,6 +182,25 @@ const DEFAULT_STATE: UserState = {
   workoutLogs: [],
 };
 
+// --- Helper to calculate stats ---
+const calculateTodayStats = (logs: LogEntry[]): DailyStats => {
+  const today = new Date();
+  const todayLogs = logs.filter(log => {
+    const logDate = new Date(log.timestamp);
+    return logDate.getDate() === today.getDate() &&
+           logDate.getMonth() === today.getMonth() &&
+           logDate.getFullYear() === today.getFullYear();
+  });
+
+  return todayLogs.reduce((acc, log) => ({
+    consumedCalories: acc.consumedCalories + log.calories,
+    consumedProtein: acc.consumedProtein + log.protein,
+    consumedCarbs: acc.consumedCarbs + log.carbs,
+    consumedFat: acc.consumedFat + log.fat,
+    spentBudget: acc.spentBudget + log.price,
+  }), { ...DEFAULT_STATS });
+};
+
 // --- Context ---
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -179,97 +208,100 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<UserState>(DEFAULT_STATE);
 
-  // 1. Auth Listener
+  // 1. Auth & Data Listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    let unsubscribeFirestore: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
         if (currentUser) {
-            // User logged in, try to load data from localStorage key specific to user
-            const saved = localStorage.getItem(`gojoe-user-${currentUser.uid}`);
-            const userData = saved ? JSON.parse(saved) : {};
+            // User Logged In - Set up Firestore Listener
+            const userDocRef = doc(db, "users", currentUser.uid);
             
-            setState(prev => ({
-                ...prev,
-                user: currentUser,
-                authLoading: false,
-                ...userData, // Load saved preferences
-                // Ensure defaults if first time or missing fields
-                profile: userData.profile || DEFAULT_PROFILE,
-                goals: userData.goals || DEFAULT_GOALS,
-                workoutLogs: userData.workoutLogs || [],
-            }));
+            unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const userData = docSnap.data();
+                    setState(prev => ({
+                        ...prev,
+                        user: currentUser,
+                        authLoading: false,
+                        ...userData,
+                        // Ensure defaults
+                        profile: userData.profile || DEFAULT_PROFILE,
+                        goals: userData.goals || DEFAULT_GOALS,
+                        logs: userData.logs || [],
+                        bodyLogs: userData.bodyLogs || [],
+                        workoutLogs: userData.workoutLogs || [],
+                        todayStats: calculateTodayStats(userData.logs || [])
+                    }));
+                } else {
+                    // New user in Auth but no data in Firestore yet (rare, but handled)
+                    setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
+                }
+            }, (error) => {
+                console.error("Firestore Listen Error:", error);
+                setState(prev => ({ ...prev, authLoading: false }));
+            });
+
         } else {
-            // User logged out
+            // User Logged Out
+            if (unsubscribeFirestore) unsubscribeFirestore();
             setState(prev => ({ ...DEFAULT_STATE, authLoading: false }));
         }
     });
-    return () => unsubscribe();
+
+    return () => {
+        unsubscribeAuth();
+        if (unsubscribeFirestore) unsubscribeFirestore();
+    };
   }, []);
 
-  // 2. Persist Data (Only when user is logged in)
-  useEffect(() => {
-    if (state.user && !state.authLoading) {
-        const dataToSave = {
-            hasCompletedOnboarding: state.hasCompletedOnboarding,
-            profile: state.profile,
-            goals: state.goals,
-            trainingMode: state.trainingMode,
-            logs: state.logs,
-            bodyLogs: state.bodyLogs,
-            workoutLogs: state.workoutLogs
-        };
-        localStorage.setItem(`gojoe-user-${state.user.uid}`, JSON.stringify(dataToSave));
-    }
-  }, [state.user, state.hasCompletedOnboarding, state.profile, state.goals, state.trainingMode, state.logs, state.bodyLogs, state.workoutLogs, state.authLoading]);
-
-  // Auth Actions
-  const login = async () => {
+  // --- Helper to save to Firestore ---
+  const saveToFirestore = async (updates: Partial<UserState>) => {
+      if (!state.user) return;
       try {
-          await signInWithPopup(auth, googleProvider);
-      } catch (error: any) {
-          console.error("Login failed:", error);
-          let errorMessage = "登入失敗，請重試";
-          if (error.code === 'auth/popup-closed-by-user') errorMessage = "您關閉了登入視窗";
-          else if (error.code === 'auth/unauthorized-domain') errorMessage = "網域未授權";
-          alert(errorMessage);
+          const userDocRef = doc(db, "users", state.user.uid);
+          await setDoc(userDocRef, updates, { merge: true });
+      } catch (e) {
+          console.error("Error saving to Firestore:", e);
       }
+  };
+
+  // --- Auth Actions ---
+  const login = async (email: string, pass: string) => {
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      await signInWithEmailAndPassword(auth, email, pass);
+  };
+
+  const signup = async (email: string, pass: string) => {
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      // Create initial document
+      const userDocRef = doc(db, "users", cred.user.uid);
+      await setDoc(userDocRef, {
+          profile: DEFAULT_PROFILE,
+          goals: DEFAULT_GOALS,
+          logs: [],
+          bodyLogs: [],
+          workoutLogs: [],
+          hasCompletedOnboarding: false,
+          trainingMode: 'rest'
+      });
   };
 
   const logout = async () => {
       await signOut(auth);
-      setState(DEFAULT_STATE);
   };
 
-  // Helper to recalculate todayStats
-  const calculateTodayStats = (logs: LogEntry[]): DailyStats => {
-    const today = new Date();
-    const todayLogs = logs.filter(log => {
-      const logDate = new Date(log.timestamp);
-      return logDate.getDate() === today.getDate() &&
-             logDate.getMonth() === today.getMonth() &&
-             logDate.getFullYear() === today.getFullYear();
-    });
-
-    return todayLogs.reduce((acc, log) => ({
-      consumedCalories: acc.consumedCalories + log.calories,
-      consumedProtein: acc.consumedProtein + log.protein,
-      consumedCarbs: acc.consumedCarbs + log.carbs,
-      consumedFat: acc.consumedFat + log.fat,
-      spentBudget: acc.spentBudget + log.price,
-    }), { ...DEFAULT_STATS });
-  };
+  // --- Data Actions ---
 
   const updateProfile = (updates: Partial<UserProfile>) => {
-    setState((prev) => ({
-      ...prev,
-      profile: { ...prev.profile, ...updates },
-    }));
+    const newProfile = { ...state.profile, ...updates };
+    saveToFirestore({ profile: newProfile });
   };
 
   const updateGoals = (updates: Partial<UserGoals>) => {
-    setState((prev) => ({
-      ...prev,
-      goals: { ...prev.goals, ...updates },
-    }));
+    const newGoals = { ...state.goals, ...updates };
+    saveToFirestore({ goals: newGoals });
   };
 
   const addLog = (logData: Omit<LogEntry, 'id' | 'timestamp'>) => {
@@ -278,36 +310,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
-    setState((prev) => {
-      const updatedLogs = [...prev.logs, newLog];
-      return {
-        ...prev,
-        logs: updatedLogs,
-        todayStats: calculateTodayStats(updatedLogs),
-      };
-    });
+    const newLogs = [...state.logs, newLog];
+    saveToFirestore({ logs: newLogs });
   };
 
   const updateLog = (updatedLog: LogEntry) => {
-    setState((prev) => {
-      const updatedLogs = prev.logs.map(log => log.id === updatedLog.id ? updatedLog : log);
-      return {
-        ...prev,
-        logs: updatedLogs,
-        todayStats: calculateTodayStats(updatedLogs),
-      };
-    });
+    const newLogs = state.logs.map(log => log.id === updatedLog.id ? updatedLog : log);
+    saveToFirestore({ logs: newLogs });
   };
 
   const deleteLog = (id: string) => {
-    setState((prev) => {
-      const updatedLogs = prev.logs.filter(log => log.id !== id);
-      return {
-        ...prev,
-        logs: updatedLogs,
-        todayStats: calculateTodayStats(updatedLogs),
-      };
-    });
+    const newLogs = state.logs.filter(log => log.id !== id);
+    saveToFirestore({ logs: newLogs });
   };
 
   const addBodyLog = (logData: Omit<BodyLogEntry, 'id' | 'timestamp'>) => {
@@ -316,48 +330,36 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
-
-    setState((prev) => ({
-      ...prev,
-      bodyLogs: [...(prev.bodyLogs || []), newLog],
-      profile: logData.weight 
-        ? { ...prev.profile, weight: logData.weight } 
-        : prev.profile
-    }));
+    const newBodyLogs = [...state.bodyLogs, newLog];
+    const newProfile = logData.weight 
+        ? { ...state.profile, weight: logData.weight } 
+        : state.profile;
+        
+    saveToFirestore({ bodyLogs: newBodyLogs, profile: newProfile });
   };
 
   const deleteBodyLog = (id: string) => {
-    setState((prev) => ({
-      ...prev,
-      bodyLogs: prev.bodyLogs.filter(log => log.id !== id),
-    }));
+    const newBodyLogs = state.bodyLogs.filter(log => log.id !== id);
+    saveToFirestore({ bodyLogs: newBodyLogs });
   };
 
-  // --- WORKOUT METHODS ---
   const addWorkoutLog = (logData: Omit<WorkoutLog, 'id' | 'timestamp'>) => {
     const newLog: WorkoutLog = {
       ...logData,
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
-    setState(prev => ({
-      ...prev,
-      workoutLogs: [...prev.workoutLogs, newLog]
-    }));
+    saveToFirestore({ workoutLogs: [...state.workoutLogs, newLog] });
   };
 
   const updateWorkoutLog = (id: string, updates: Partial<WorkoutLog>) => {
-    setState(prev => ({
-      ...prev,
-      workoutLogs: prev.workoutLogs.map(log => log.id === id ? { ...log, ...updates } : log)
-    }));
+    const newLogs = state.workoutLogs.map(log => log.id === id ? { ...log, ...updates } : log);
+    saveToFirestore({ workoutLogs: newLogs });
   };
 
   const deleteWorkoutLog = (id: string) => {
-    setState(prev => ({
-      ...prev,
-      workoutLogs: prev.workoutLogs.filter(log => log.id !== id)
-    }));
+    const newLogs = state.workoutLogs.filter(log => log.id !== id);
+    saveToFirestore({ workoutLogs: newLogs });
   };
 
   const getWorkoutLogByDate = (date: string) => {
@@ -365,25 +367,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeOnboarding = () => {
-    setState((prev) => ({
-      ...prev,
-      hasCompletedOnboarding: true,
-      todayStats: DEFAULT_STATS,
-      logs: [],
-      bodyLogs: [],
-      workoutLogs: []
-    }));
+    saveToFirestore({ hasCompletedOnboarding: true });
   };
 
   const resetData = () => {
-    setState(prev => ({
-        ...DEFAULT_STATE,
-        user: prev.user,
-        authLoading: false
-    }));
-    if (state.user) {
-        localStorage.removeItem(`gojoe-user-${state.user.uid}`);
-    }
+      saveToFirestore({
+          hasCompletedOnboarding: false,
+          logs: [],
+          bodyLogs: [],
+          workoutLogs: [],
+          todayStats: DEFAULT_STATS
+      });
   };
 
   const recalculateTargets = (newProfile: UserProfile, mode: TrainingMode = 'rest') => {
@@ -414,14 +408,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setTrainingMode = (mode: TrainingMode) => {
-      setState(prev => ({ ...prev, trainingMode: mode }));
+      saveToFirestore({ trainingMode: mode });
+      // We assume recalculateTargets will be called if needed by the component
+      // or we can call logic here but keep it simple for now.
       recalculateTargets(state.profile, mode);
   };
 
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      login, logout, updateProfile, updateGoals, 
+      login, signup, logout, updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,
       addWorkoutLog, updateWorkoutLog, deleteWorkoutLog, getWorkoutLogByDate,

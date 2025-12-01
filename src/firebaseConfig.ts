@@ -1,6 +1,7 @@
 
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import type { Auth } from "firebase/auth";
 
 // Safe Environment Variable Accessor
@@ -27,7 +28,8 @@ const config = {
 let app;
 // Explicitly type these to avoid "implicitly has type 'any'" errors
 let auth: Auth | any;
-let googleProvider: GoogleAuthProvider | any;
+let db: any;
+let googleProvider: any;
 let isFirebaseInitialized = false;
 
 try {
@@ -38,10 +40,8 @@ try {
 
     app = initializeApp(config);
     auth = getAuth(app);
-    
+    db = getFirestore(app);
     googleProvider = new GoogleAuthProvider();
-    googleProvider.addScope('profile');
-    googleProvider.addScope('email');
     
     isFirebaseInitialized = true;
     console.log("✅ Firebase Initialized Successfully");
@@ -50,25 +50,21 @@ try {
     console.warn("⚠️ Firebase Initialization Error (Preview Mode):", error);
     
     // Mock Auth object to prevent white screen crash
-    // Cast to any to bypass strict Auth type checks for the mock
     auth = {
         currentUser: null,
         onAuthStateChanged: (callback: any) => {
             callback(null); 
             return () => {}; 
         },
-        signInWithPopup: async () => {
-            throw new Error("Firebase 未正確初始化 (缺少 API Key)，無法登入。請檢查環境變數。");
-        },
-        signInWithRedirect: async () => {
-            throw new Error("Firebase 未正確初始化 (缺少 API Key)，無法登入。請檢查環境變數。");
-        },
+        signInWithEmailAndPassword: async () => { throw new Error("Firebase not initialized"); },
+        createUserWithEmailAndPassword: async () => { throw new Error("Firebase not initialized"); },
         signOut: async () => {}
     };
+    db = {}; // Mock DB
+    googleProvider = {};
 
-    googleProvider = new GoogleAuthProvider();
     isFirebaseInitialized = false;
 }
 
-export { auth, googleProvider, isFirebaseInitialized };
+export { auth, db, googleProvider, isFirebaseInitialized };
 export default app;

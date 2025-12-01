@@ -1,6 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Key, Globe, Check, ExternalLink, Shield, LogOut, Zap, LayoutGrid, Terminal, Loader2 } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { Key, Globe, Check, Copy, ExternalLink, Shield, LogOut, Zap, LayoutGrid, Terminal } from 'lucide-react';
 
 interface ApiKeySetupProps {
   onComplete: () => void;
@@ -12,37 +12,22 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
   const [inputValue, setInputValue] = useState('');
   const [savedKey, setSavedKey] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const [isValidating, setIsValidating] = useState(false);
   const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   useEffect(() => {
-    // 檢查是否已有有效 Key
-    if (aiService.hasApiKey()) {
-       setSavedKey(aiService.getApiKey());
-    }
+    const key = localStorage.getItem('gemini_api_key');
+    if (key) setSavedKey(key);
   }, []);
 
-  const handleManualSave = async () => {
-    const rawKey = inputValue.trim();
-    if (!rawKey.startsWith('AIza')) {
-      setError('無效的 API Key 格式。必須以 "AIza" 開頭。');
+  const handleManualSave = () => {
+    if (!inputValue.trim().startsWith('AIza')) {
+      setError('無效的 API Key 格式。通常以 "AIza" 開頭。');
       return;
     }
-
-    setIsValidating(true);
+    localStorage.setItem('gemini_api_key', inputValue.trim());
+    setSavedKey(inputValue.trim());
     setError('');
-
-    // 真實連線測試
-    const isValid = await aiService.validateApiKey(rawKey);
-
-    if (isValid) {
-        aiService.saveApiKey(rawKey);
-        setSavedKey(rawKey);
-        setTimeout(() => onComplete(), 500);
-    } else {
-        setError('API Key 驗證失敗。請確認 Key 正確且未過期，或檢查網路連線。');
-    }
-    setIsValidating(false);
+    setTimeout(() => onComplete(), 500);
   };
 
   const handleOAuth = async () => {
@@ -50,12 +35,12 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
     try {
       if ((window as any).aistudio) {
         await (window as any).aistudio.openSelectKey();
-        // 這裡無法直接取得 Key 內容進行驗證，假設流程成功
-        // App.tsx 會重新檢查
+        // Assume success if no error thrown
         onComplete();
       } else {
+        // Fallback for standard web environment mimicking OAuth flow visually
         window.open('https://aistudio.google.com/app/apikey', '_blank');
-        setActiveTab('manual'); 
+        setActiveTab('manual'); // Switch to manual so they can paste it
         setError('請在彈出的視窗中建立 Key，並切換至「手動輸入」分頁貼上。');
       }
     } catch (e) {
@@ -67,10 +52,9 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
   };
 
   const clearKey = () => {
-    aiService.removeApiKey();
+    localStorage.removeItem('gemini_api_key');
     setSavedKey(null);
     setInputValue('');
-    setError('');
   };
 
   return (
@@ -184,10 +168,10 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
 
                 <button 
                   onClick={handleManualSave}
-                  disabled={!inputValue || isValidating}
-                  className="w-full bg-brand-black text-brand-green py-3.5 rounded-xl font-black shadow-lg hover:shadow-brand-green/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  disabled={!inputValue}
+                  className="w-full bg-brand-black text-brand-green py-3.5 rounded-xl font-black shadow-lg hover:shadow-brand-green/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isValidating ? <Loader2 size={18} className="animate-spin" /> : '確認並儲存'}
+                  確認並儲存
                 </button>
               </div>
             )}

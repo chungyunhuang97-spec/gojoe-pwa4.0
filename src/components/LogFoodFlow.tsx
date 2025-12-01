@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, ArrowUp, Camera, Check, Edit3, AlertTriangle, Search, MessageSquare, ArrowLeft, Image as ImageIcon } from 'lucide-react';
 import { useUser, MealType } from '../context/UserContext';
 import { GoogleGenAI, Part, Content } from "@google/genai";
-import { aiService } from '../services/ai';
 
 interface LogFoodFlowProps {
   isOpen: boolean;
@@ -22,14 +21,6 @@ interface Message {
   cardData?: any; 
   options?: string[];
 }
-
-// --- Helper for MimeType ---
-const getMimeType = (base64String: string) => {
-    if (base64String.startsWith('data:image/png')) return 'image/png';
-    if (base64String.startsWith('data:image/jpeg')) return 'image/jpeg';
-    if (base64String.startsWith('data:image/webp')) return 'image/webp';
-    return 'image/jpeg';
-};
 
 // --- Markdown Helper ---
 const MarkdownText: React.FC<{ text: string }> = ({ text }) => {
@@ -151,8 +142,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         // Image Content
         if (m.image) {
              const cleanBase64 = m.image.split(',')[1] || m.image;
-             const mimeType = getMimeType(m.image);
-             parts.push({ inlineData: { mimeType, data: cleanBase64 } });
+             parts.push({ inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } });
         }
         
         // System Memory Injection (Card Data)
@@ -187,23 +177,17 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
 
   const analyzeWithGemini = async (currentInput: string, imageBase64?: string) => {
     setIsTyping(true);
-    if (imageBase64) addUserMessage("", imageBase64);
-    else addUserMessage(currentInput);
 
     try {
-        const apiKey = aiService.getApiKey();
-        console.log("API Key Retrieval Status (LogFood):", apiKey ? "Found (length: " + apiKey.length + ")" : "Not Found");
+        const apiKey = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
+        if (!apiKey) throw new Error("Missing API Key");
 
-        if (!apiKey) {
-            throw new Error("API Key 未設定。請至左側選單 > API Key 設定中輸入您的 Google Gemini API Key。");
-        }
-
-        const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+        const ai = new GoogleGenAI({ apiKey });
         
         // 1. Prepare History (Strictly formatted)
         const history = generateHistory();
         
-        // 2. System Instruction
+        // 2. System Instruction (Strict but Encouraging Coach Persona with Structured Options)
         const systemInstruction = `
         角色：你是一位專注於「增肌減脂」的全方位私人健身教練 "Coach Joe"。你的風格是「專業、數據導向、但富有激勵性」。
         
@@ -216,7 +200,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         - 蛋白質目標 (P)：${goals.targetProtein} 克
         - 脂肪目標 (F)：嚴格控制在 ${goals.targetFat} 克以內
         - 碳水目標 (C)：${goals.targetCarbs} 克
-        - 今日已攝取：熱量 ${todayStats.consumedCalories}, P ${todayStats.consumedProtein}g, F ${todayStats.consumedFat}g, C ${todayStats.consumedCarbs}g
+        - 今日已攝取：熱量 ${todayStats.consumedCalories}, P ${todayStats.consumedProtein}, F ${todayStats.consumedFat}
 
         核心職責與溝通原則：
         1. **法醫級數據偵訊 (Forensic Interrogation)**：
@@ -270,28 +254,27 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         const messageParts: Part[] = [];
         if (imageBase64) {
             const cleanBase64 = imageBase64.split(',')[1] || imageBase64; 
-            const mimeType = getMimeType(imageBase64);
-            messageParts.push({ inlineData: { mimeType, data: cleanBase64 } });
+            messageParts.push({ inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } });
             messageParts.push({ text: `Analyze this image.` });
         } else {
             messageParts.push({ text: currentInput });
         }
 
-        console.log('📤 Sending to Gemini...');
         const result = await chat.sendMessage({ message: messageParts });
         const rawText = result.text;
-        console.log('📥 Response received');
         
         // 5. Parse Response
-        if (!rawText) throw new Error("Empty response from AI");
+        if (!rawText) throw new Error("Empty response");
         // Extract JSON if wrapped in markdown code blocks
         let jsonString = rawText;
+        // Robust extraction: find first '{' and last '}'
         const firstBrace = rawText.indexOf('{');
         const lastBrace = rawText.lastIndexOf('}');
         
         if (firstBrace !== -1 && lastBrace !== -1) {
             jsonString = rawText.substring(firstBrace, lastBrace + 1);
         } else {
+             // Fallback cleanup
              jsonString = rawText.replace(/```json|```/g, '').trim();
         }
 
@@ -301,13 +284,17 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         
         // 6. Handle Logic
         if (!responseData.is_sufficient) {
+            // Case: Need more info - Provide Options if available
             addAiMessage(
                 responseData.missing_info_question || "資訊不足，請補充細節。",
                 responseData.inquiry_options || []
             );
         } else {
+            // Case: Success
+            // Show Coach Lecture
             addAiMessage(responseData.coach_lecture || "分析完成。");
             
+            // Show Data Card
             setTimeout(() => {
                 addAiMessage("", [], {
                     foodName: responseData.food_name || "Unknown",
@@ -320,21 +307,9 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         }
 
     } catch (error: any) {
-        console.error("Gemini Error Details:", error);
+        console.error("Gemini Error:", error);
         setIsTyping(false);
-        
-        let errorMsg = error.message || JSON.stringify(error);
-        if (error.message?.includes('API key not valid') || error.message?.includes('403')) {
-            errorMsg = "API Key 無效或過期。請至「API Key 設定」重新輸入。";
-        } else if (error.message?.includes('429')) {
-            errorMsg = "請求過於頻繁，請稍候再試。";
-        } else if (error.message?.includes('JSON')) {
-            errorMsg = "AI 回傳格式錯誤，請再試一次。";
-        } else if (!navigator.onLine) {
-            errorMsg = "網路錯誤，請檢查連線。";
-        }
-        
-        addErrorMessage(`分析錯誤: ${errorMsg}`);
+        addErrorMessage("分析錯誤，請確認 API Key 設定或網路連線。");
     }
   };
 
@@ -375,15 +350,12 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
           price: finalData.price,
           mealType: getMealTypeByTime()
       });
-      setMessages(prev => [...prev, { 
-          id: Date.now().toString(), 
-          sender: 'ai', 
-          type: 'text', 
-          content: `✅ 已紀錄 **${finalData.foodName}** (${finalData.calories} kcal)。` 
-      }]);
+      onClose();
   };
 
+  // --- Safety Check Logic ---
   const handleCheckAndConfirm = (data: any) => {
+      // 1. Fat Red Line Check
       const potentialFat = todayStats.consumedFat + (data.macros.fat || 0);
       const fatRatio = potentialFat / goals.targetFat;
       
@@ -397,6 +369,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
           return;
       }
 
+      // 2. Protein Check
       if ((data.macros.protein || 0) < 30) {
           setAlertInfo({
               type: 'warning',
@@ -407,6 +380,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
           return;
       }
 
+      // 3. Pre-workout Fuel Check (Leg Day + Afternoon + Low Carbs)
       const hour = new Date().getHours();
       const isAfternoon = hour >= 13 && hour < 18;
       if (trainingMode === 'leg' && isAfternoon && todayStats.consumedCarbs < 50) {
@@ -419,9 +393,11 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
           return;
       }
 
+      // Safe to proceed
       confirmLog(data);
   };
 
+  // --- Camera Logic ---
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -460,6 +436,8 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     }
   };
 
+  // --- Components ---
+
   const ReviewCard = ({ data }: { data: any }) => {
       const [localData, setLocalData] = useState(data);
       const [isCooldown, setIsCooldown] = useState(false);
@@ -488,6 +466,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
 
       return (
           <div className="bg-white rounded-[1.5rem] p-5 shadow-xl border border-gray-100 mt-2 max-w-[95%] animate-fade-in-up w-full">
+               {/* Header */}
                <div className="flex items-center justify-between mb-3 border-b border-gray-100 pb-2">
                    <div className="flex items-center gap-2">
                        <Search size={14} className="text-brand-green" />
@@ -503,6 +482,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                    </div>
                </div>
 
+               {/* Ingredients Breakdown */}
                <div className="bg-gray-50 rounded-xl p-3 mb-4 border border-gray-100">
                    <p className="text-[10px] font-bold text-gray-400 uppercase mb-1">詳細成分 (Forensic Analysis)</p>
                    <p className="text-xs text-gray-600 font-medium leading-relaxed">
@@ -510,6 +490,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                    </p>
                </div>
 
+               {/* Main Stats Grid - Row 1 */}
                <div className="grid grid-cols-2 gap-3 mb-3">
                    <div className="bg-brand-black p-3 rounded-2xl border border-gray-800 relative overflow-hidden group">
                        <div className="absolute top-0 right-0 p-2 opacity-10">
@@ -540,6 +521,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                    </div>
                </div>
 
+               {/* Macros Grid - Row 2 */}
                <div className="grid grid-cols-3 gap-2 mb-4">
                    <div className="bg-gray-50 p-2 rounded-xl border border-gray-100 text-center">
                        <span className="text-[9px] font-bold text-gray-400 uppercase block mb-1">Protein</span>
@@ -588,6 +570,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                    </div>
                </div>
                
+               {/* High Fat Friction UI */}
                {isCooldown && (
                    <div className="mb-4 bg-red-50 p-3 rounded-xl border border-red-100">
                        <p className="text-xs font-bold text-red-500 mb-2">⚠️ 高脂警告！請輸入「我接受後果」以解鎖紀錄。</p>
@@ -626,9 +609,12 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
   if (!isOpen) return null;
 
   return (
+    // FULL PAGE CONTAINER: Fixed to viewport, white background, high Z-index
     <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center sm:bg-black/80">
+      
       <div className="w-full h-full sm:max-w-[420px] sm:h-[90vh] sm:max-h-[850px] bg-white sm:rounded-[2.5rem] flex flex-col overflow-hidden relative shadow-2xl animate-fade-in-up">
         
+        {/* Navbar */}
         <div className="flex items-center justify-between p-4 pt-10 sm:pt-6 bg-white/95 backdrop-blur-sm border-b border-gray-100 z-20">
            <button 
              onClick={onClose} 
@@ -645,9 +631,10 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                飲食紀錄對話
            </h2>
            
-           <div className="w-10" /> 
+           <div className="w-10" /> {/* Spacer for centering */}
         </div>
 
+        {/* --- MODE: CAMERA --- */}
         {step === 'CAMERA' && (
              <div className="flex-1 bg-black relative flex flex-col">
                 <input 
@@ -680,11 +667,15 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
              </div>
         )}
 
+        {/* --- MODE: CHAT --- */}
         {step === 'CHAT' && (
             <div className="flex-1 flex flex-col bg-white overflow-hidden relative">
+                {/* Chat Area */}
                 <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth no-scrollbar pb-32">
                     {messages.map((msg) => (
                         <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up`}>
+                            
+                            {/* Avatar for AI */}
                             {msg.sender === 'ai' && msg.type !== 'error' && (
                                 <div className="flex items-center gap-2 mb-1 ml-1">
                                     <div className="w-6 h-6 bg-brand-black rounded-full flex items-center justify-center text-brand-green text-[10px] font-black shadow-sm border border-gray-100">
@@ -694,6 +685,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                                 </div>
                             )}
 
+                            {/* Text Bubble */}
                             {msg.type === 'text' && msg.content && (
                                 <div className={`max-w-[85%] p-4 rounded-2xl text-sm font-medium shadow-sm leading-relaxed ${
                                     msg.sender === 'user' 
@@ -704,6 +696,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                                 </div>
                             )}
                             
+                            {/* Error Bubble */}
                             {msg.type === 'error' && (
                                 <div className="max-w-[85%] p-3 rounded-2xl text-xs font-bold shadow-sm leading-relaxed bg-red-50 text-red-500 border border-red-100 flex items-center gap-2">
                                     <AlertTriangle size={14} />
@@ -711,16 +704,19 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                                 </div>
                             )}
 
+                            {/* Image Bubble */}
                             {msg.type === 'image' && msg.image && (
                                 <div className="w-48 h-48 rounded-2xl overflow-hidden border-2 border-brand-green shadow-md relative group">
                                     <img src={msg.image} className="w-full h-full object-cover" alt="upload" />
                                 </div>
                             )}
 
+                            {/* Result Card */}
                             {msg.type === 'card' && msg.cardData && (
                                 <ReviewCard data={msg.cardData} />
                             )}
                             
+                            {/* Quick Options (Structured Buttons) */}
                             {msg.sender === 'ai' && msg.options && msg.options.length > 0 && messages.indexOf(msg) === messages.length - 1 && !isTyping && (
                                 <div className="flex flex-wrap gap-2 mt-2 max-w-[95%] pl-1">
                                     {msg.options.map(opt => (
@@ -748,9 +744,10 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                             </div>
                         </div>
                     )}
-                    <div className="h-6" />
+                    <div className="h-6" /> {/* Bottom spacer */}
                 </div>
 
+                {/* Input Area - Fixed at Bottom with Safe Area */}
                 <div className="absolute bottom-0 left-0 right-0 p-4 bg-white/95 backdrop-blur-md border-t border-gray-100 pb-8 sm:pb-6">
                      <div className="flex items-end gap-3">
                          <button onClick={() => setStep('CAMERA')} className="p-3 bg-gray-50 rounded-full text-gray-400 hover:bg-gray-100 hover:text-brand-black transition-colors border border-gray-100 active:scale-95 mb-0.5">
@@ -785,6 +782,7 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                      </div>
                 </div>
 
+                {/* SAFETY ALERT MODAL */}
                 {alertInfo && (
                     <div className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-fade-in">
                         <div className={`w-full max-w-sm bg-white rounded-[2rem] p-6 shadow-2xl transform transition-transform scale-100 border-2 ${alertInfo.type === 'danger' ? 'border-red-500' : 'border-yellow-400'}`}>

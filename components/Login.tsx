@@ -1,9 +1,45 @@
-
-import React from 'react';
+import React, { useState } from 'react';
 import { useUser } from '../context/UserContext';
+import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { login } = useUser();
+  const { login, signup } = useUser();
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+        setError("請填寫完整資訊");
+        return;
+    }
+    setError('');
+    setIsLoading(true);
+
+    try {
+        if (isSignUp) {
+            await signup(email, password);
+        } else {
+            await login(email, password);
+        }
+    } catch (err: any) {
+        console.error(err);
+        if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+            setError("帳號或密碼錯誤");
+        } else if (err.code === 'auth/email-already-in-use') {
+            setError("此 Email 已被註冊");
+        } else if (err.code === 'auth/weak-password') {
+            setError("密碼強度不足 (至少6位)");
+        } else {
+            setError(err.message || "發生錯誤，請稍後再試");
+        }
+    } finally {
+        setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 relative overflow-hidden font-nunito">
@@ -13,33 +49,87 @@ export const Login: React.FC = () => {
 
       <div className="w-full max-w-sm z-10 flex flex-col items-center">
         {/* Logo Area */}
-        <div className="mb-12 text-center">
+        <div className="mb-10 text-center">
           <div className="w-24 h-24 bg-brand-black rounded-[2rem] flex items-center justify-center shadow-2xl shadow-brand-green/20 mb-6 mx-auto transform rotate-3">
              <span className="text-4xl">💪</span>
           </div>
           <h1 className="text-4xl font-black italic tracking-tighter text-brand-black mb-2">
             GO JOE<span className="text-brand-green">!</span>
           </h1>
-          <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">你的 AI 飲食教練</p>
-        </div>
-
-        {/* Login Card */}
-        <div className="w-full space-y-4 animate-fade-in-up">
-          <button 
-            onClick={login}
-            className="w-full bg-white border-2 border-gray-100 p-4 rounded-2xl flex items-center justify-center gap-3 hover:border-brand-green hover:shadow-lg hover:shadow-brand-green/10 transition-all active:scale-95 group"
-          >
-             <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6" alt="Google" />
-             <span className="font-extrabold text-gray-700 group-hover:text-black">使用 Google 登入</span>
-          </button>
-          
-          <p className="text-center text-xs font-bold text-gray-300 mt-6 leading-relaxed">
-            登入即代表您同意使用條款<br/>
-            我們不會在未經許可下發佈任何內容
+          <p className="text-gray-400 font-bold text-sm tracking-widest uppercase">
+              {isSignUp ? "建立您的帳號" : "歡迎回來"}
           </p>
         </div>
+
+        {/* Auth Form */}
+        <form onSubmit={handleSubmit} className="w-full space-y-4 animate-fade-in-up">
+          
+          <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Email</label>
+              <div className="relative">
+                  <div className="absolute left-4 top-3.5 text-gray-400">
+                      <Mail size={18} />
+                  </div>
+                  <input 
+                    type="email" 
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 transition-all"
+                    placeholder="joe@example.com"
+                  />
+              </div>
+          </div>
+
+          <div className="space-y-1">
+              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">密碼</label>
+              <div className="relative">
+                  <div className="absolute left-4 top-3.5 text-gray-400">
+                      <Lock size={18} />
+                  </div>
+                  <input 
+                    type="password" 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 transition-all"
+                    placeholder="••••••••"
+                  />
+              </div>
+          </div>
+
+          {error && (
+              <div className="bg-red-50 text-red-500 text-xs font-bold p-3 rounded-xl border border-red-100 text-center">
+                  {error}
+              </div>
+          )}
+
+          <button 
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-brand-black text-brand-green py-4 rounded-2xl font-black text-lg shadow-lg hover:shadow-brand-green/20 active:scale-95 transition-all flex items-center justify-center gap-2 mt-4"
+          >
+             {isLoading ? <Loader2 className="animate-spin" /> : (
+                 <>
+                    {isSignUp ? "註冊帳號" : "登入"}
+                    <ArrowRight size={20} />
+                 </>
+             )}
+          </button>
+        </form>
+        
+        {/* Toggle Mode */}
+        <div className="mt-8 text-center">
+            <p className="text-xs font-bold text-gray-400 mb-2">
+                {isSignUp ? "已經有帳號了嗎？" : "還沒有帳號？"}
+            </p>
+            <button 
+                onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
+                className="text-sm font-black text-brand-black border-b-2 border-brand-green pb-0.5 hover:opacity-70 transition-opacity"
+            >
+                {isSignUp ? "直接登入" : "立即註冊"}
+            </button>
+        </div>
+
       </div>
     </div>
   );
 };
-    

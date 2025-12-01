@@ -1,3 +1,4 @@
+
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
@@ -17,12 +18,27 @@ root.render(
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
+    // Skip Service Worker in Google AI Studio / Preview Environments
+    // to avoid "Origin Mismatch" errors (iframe origin vs script origin).
+    const hostname = window.location.hostname;
+    
+    // Check for common preview domains
+    if (
+      hostname.includes('scf.usercontent.goog') || 
+      hostname.includes('ai.studio') || 
+      hostname.includes('googleusercontent.com')
+    ) {
+      console.log('NOTICE: Service Worker registration skipped in Preview Environment.');
+      return;
+    }
+
+    // Use root-relative path to let browser resolve origin automatically
     navigator.serviceWorker.register('/sw.js')
       .then((registration) => {
         console.log('SW registered: ', registration);
       })
       .catch((registrationError) => {
-        console.log('SW registration failed: ', registrationError);
+        console.warn('SW registration failed:', registrationError);
       });
   });
 }
