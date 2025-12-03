@@ -298,7 +298,7 @@ export const Login: React.FC = () => {
                                     </button>
                                 </div>
                                 <p className="text-[9px] text-blue-400 mt-1 leading-tight">
-                                    若登入失敗 (auth/network-request-failed)，請將此網域加入 Firebase Console {'>'} Authentication {'>'} Settings {'>'} Authorized Domains。
+                                    若登入失敗 (auth/network-request-failed)，請將此網域加入 Firebase Console → Authentication → Settings → Authorized Domains。
                                 </p>
                             </div>
                         )}
