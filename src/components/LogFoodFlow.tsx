@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ArrowUp, Camera, Check, Edit3, AlertTriangle, Search, MessageSquare, ArrowLeft, Image as ImageIcon } from 'lucide-react';
+import { X, ArrowUp, Camera, Check, Edit3, AlertTriangle, Search, MessageSquare, ArrowLeft, Image as ImageIcon, Key } from 'lucide-react';
 import { useUser, MealType } from '../context/UserContext';
-import { GoogleGenAI, Part, Content } from "@google/genai";
+import { Content, Part } from "@google/genai"; 
+import { aiCoach, CoachContext, CoachResponse } from '../services/aiCoach';
+import { aiService } from '../services/ai';
 
 interface LogFoodFlowProps {
   isOpen: boolean;
@@ -27,7 +29,7 @@ const MarkdownText: React.FC<{ text: string }> = ({ text }) => {
   if (!text) return null;
   const parts = text.split(/(\*\*.*?\*\*)/g);
   return (
-    <span className="whitespace-pre-wrap">
+    <span className="whitespace-pre-wrap leading-relaxed">
       {parts.map((part, i) => {
         if (part.startsWith('**') && part.endsWith('**')) {
           return <strong key={i} className="font-black text-gray-900">{part.slice(2, -2)}</strong>;
@@ -39,7 +41,7 @@ const MarkdownText: React.FC<{ text: string }> = ({ text }) => {
 };
 
 export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initialMode }) => {
-  const { addLog, profile, goals, logs, todayStats, trainingMode } = useUser();
+  const { addLog, profile, goals, todayStats, trainingMode } = useUser();
   const [step, setStep] = useState<FlowStep>('CHAT');
   const [inputText, setInputText] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -49,10 +51,25 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
   // Safety Alert State
   const [alertInfo, setAlertInfo] = useState<{ type: 'danger' | 'warning', title: string, msg: string, dataToSave: any } | null>(null);
 
+  // API Key Missing State
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<{text: string, image?: string} | null>(null);
+  const [tempApiKey, setTempApiKey] = useState('');
+
   // Camera Refs
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasCameraPerm, setHasCameraPerm] = useState<boolean | null>(null);
+
+  // --- Helper Functions ---
+  const getDietPlanString = (mode: string) => {
+      switch(mode) {
+          case 'leg': return 'High Carb (Leg Day)';
+          case 'push_pull': return 'High Protein (Push/Pull)';
+          case 'rest': return 'Low Carb (Rest Day)';
+          default: return 'Balanced';
+      }
+  };
 
   // --- Initialization ---
   useEffect(() => {
@@ -61,11 +78,18 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
       setMessages([]);
       setInputText('');
       setAlertInfo(null);
+      setShowApiKeyModal(false);
       
       if (initialMode === 'text') {
-          // Initial greeting
+          const plan = getDietPlanString(trainingMode);
+          const remaining = Math.max(0, goals.targetCalories - todayStats.consumedCalories);
+          
           setTimeout(() => {
-              addAiMessage("我是 Coach Joe。請回報你的餐點。", ['排骨便當', '地瓜 200g', '拿鐵 (無糖)']);
+              addAiMessage(`早安 ${profile.displayName || 'Joe'}！\n今日模式：**${plan}**。\n剩餘熱量：**${remaining} kcal**。\n\n需要我推薦食物，還是直接紀錄？`, [
+                  `🍌 我還剩 ${remaining} kcal 該吃什麼？`,
+                  '🍱 紀錄便當',
+                  '☕ 紀錄咖啡'
+              ]);
           }, 500);
       }
     } else {
@@ -80,7 +104,6 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     }
   }, [messages, isTyping]);
 
-  // --- Helper Functions ---
   const addAiMessage = (text: string, options?: string[], cardData?: any) => {
     if (!text && !cardData && (!options || options.length === 0)) return;
 
@@ -121,31 +144,24 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     return 'snack';
   };
 
-  // --- AI Logic: Gemini with Memory ---
+  // --- AI Logic using Service ---
 
   const generateHistory = (): Content[] => {
-    // 1. Filter out error messages
     const validMessages = messages.filter(m => m.type !== 'error');
     if (validMessages.length === 0) return [];
 
     const history: Content[] = [];
     let lastRole: 'user' | 'model' | null = null;
 
-    // 2. Coalesce consecutive messages from the same sender
     validMessages.forEach(m => {
         const role = m.sender === 'user' ? 'user' : 'model';
         const parts: Part[] = [];
         
-        // Text Content
         if (m.content) parts.push({ text: m.content });
-        
-        // Image Content
         if (m.image) {
              const cleanBase64 = m.image.split(',')[1] || m.image;
              parts.push({ inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } });
         }
-        
-        // System Memory Injection (Card Data)
         if (m.type === 'card' && m.cardData) {
             parts.push({ text: `[System Memory] AI has previously analyzed: ${JSON.stringify(m.cardData)}` });
         }
@@ -153,21 +169,16 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
         if (parts.length === 0) return;
 
         if (lastRole === role) {
-            // Append parts to the previous turn
             const lastTurn = history[history.length - 1];
             if (lastTurn && lastTurn.parts) {
                 lastTurn.parts = [...lastTurn.parts, ...parts];
             }
         } else {
-            // Start a new turn
             history.push({ role, parts });
             lastRole = role;
         }
     });
 
-    // 3. Ensure History Starts with 'user'
-    // Gemini Chat API often requires history to start with the user turn.
-    // If the first message is the AI greeting ('model'), remove it to prevent 400 errors.
     if (history.length > 0 && history[0].role === 'model') {
         history.shift();
     }
@@ -179,137 +190,84 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
     setIsTyping(true);
 
     try {
-        const apiKey = localStorage.getItem('gemini_api_key') || process.env.API_KEY;
-        if (!apiKey) throw new Error("Missing API Key");
-
-        const ai = new GoogleGenAI({ apiKey });
-        
-        // 1. Prepare History (Strictly formatted)
         const history = generateHistory();
-        
-        // 2. System Instruction (Strict but Encouraging Coach Persona with Structured Options)
-        const systemInstruction = `
-        角色：你是一位專注於「增肌減脂」的全方位私人健身教練 "Coach Joe"。你的風格是「專業、數據導向、但富有激勵性」。
-        
-        使用者名字：Joe。
-        核心原則：**你不是Joe。請直接稱呼使用者為 "Joe"。**
 
-        用戶核心數據 (Context)：
-        - 主要目標：${profile.goalType === 'lose_fat' ? '減脂' : profile.goalType === 'build_muscle' ? '增肌' : profile.goalType === 'recomp' ? '同時增肌減脂' : '維持'}
-        - 總熱量目標 (TDEE)：${goals.targetCalories} Kcal
-        - 蛋白質目標 (P)：${goals.targetProtein} 克
-        - 脂肪目標 (F)：嚴格控制在 ${goals.targetFat} 克以內
-        - 碳水目標 (C)：${goals.targetCarbs} 克
-        - 今日已攝取：熱量 ${todayStats.consumedCalories}, P ${todayStats.consumedProtein}, F ${todayStats.consumedFat}
+        // Prepare Real-Time Context
+        const context: CoachContext = {
+            userName: profile.displayName || 'Joe',
+            coachMode: profile.coachMode || 'encouraging',
+            dietPlan: getDietPlanString(trainingMode), // e.g. "High Carb (Leg Day)"
+            targetCalories: goals.targetCalories,
+            currentCalories: todayStats.consumedCalories,
+            remainingCalories: Math.max(0, goals.targetCalories - todayStats.consumedCalories),
+            budgetRemaining: Math.max(0, goals.budget.daily - todayStats.spentBudget),
+            proteinGap: Math.max(0, goals.targetProtein - todayStats.consumedProtein),
+            carbsGap: Math.max(0, goals.targetCarbs - todayStats.consumedCarbs),
+            fatGap: Math.max(0, goals.targetFat - todayStats.consumedFat),
+        };
 
-        核心職責與溝通原則：
-        1. **法醫級數據偵訊 (Forensic Interrogation)**：
-           - **台灣飲食陷阱**：針對「便當」、「乾麵」、「滷肉飯」等高變異食物，必須追問：
-             - 烹調方式（炸/滷/煎/蒸）？
-             - 醬汁（有無淋肉燥/沙拉醬/美乃滋）？
-             - 飯量（一碗/半碗）？
-             - 肉類部位（帶皮/去皮）？
-           - 若資訊不足，**拒絕估算**，並回傳 \`is_sufficient: false\`。
-           - **關鍵：** 在追問時，必須提供 \`inquiry_options\`，讓用戶可以直接點選。
-
-        2. **脂肪拆解 (Fat Breakdown)**：
-           - 在 \`ingredients_breakdown\` 中，針對高脂食物，請明確指出油脂來源。
-           - 例如：「雞腿便當 (脂肪 35g: 炸皮 15g + 肉本身 10g + 炒菜油 10g)」。
-
-        3. **脂肪監控與警示 (F-Limit)**：
-           - 單餐脂肪 > 15g 或 總量接近 ${goals.targetFat}g 時，請發出理性警告。
-
-        4. **正向激勵 (Positive Reinforcement)**：
-           - 如果這餐營養素分配完美 (高蛋白、低脂)，請在結語加上：『✅ 漂亮！蛋白質達標且油脂控制完美，離目標身材更近一步！』
-
-        輸出格式 (JSON ONLY)：
-        {
-          "is_sufficient": boolean, // 若資訊太模糊 (如只說 "便當") 則為 false
-          "missing_info_question": string | null, // 若 false，在此填寫追問問題
-          "inquiry_options": string[] | null, // 若 false，在此提供 3-5 個選項供用戶選擇 (例如 ["炸排骨", "滷排骨", "煎排骨"])
-          "food_name": string, // 精確名稱，如 "滷雞腿便當 (去皮/飯一半)"
-          "ingredients_breakdown": string, // 成分拆解 (含脂肪來源)
-          "nutrition": {
-            "calories": number,
-            "protein": number,
-            "carbs": number,
-            "fat": number
-          },
-          "price": number,
-          "coach_lecture": string // 教練分析與建議
-        }
-        `;
-
-        // 3. Create Chat Session
-        const chat = ai.chats.create({
-            model: "gemini-2.5-flash", 
-            config: {
-                systemInstruction: systemInstruction,
-                responseMimeType: "application/json",
-            },
-            history: history
-        });
-
-        // 4. Send Message
-        const messageParts: Part[] = [];
-        if (imageBase64) {
-            const cleanBase64 = imageBase64.split(',')[1] || imageBase64; 
-            messageParts.push({ inlineData: { mimeType: 'image/jpeg', data: cleanBase64 } });
-            messageParts.push({ text: `Analyze this image.` });
-        } else {
-            messageParts.push({ text: currentInput });
-        }
-
-        const result = await chat.sendMessage({ message: messageParts });
-        const rawText = result.text;
-        
-        // 5. Parse Response
-        if (!rawText) throw new Error("Empty response");
-        // Extract JSON if wrapped in markdown code blocks
-        let jsonString = rawText;
-        // Robust extraction: find first '{' and last '}'
-        const firstBrace = rawText.indexOf('{');
-        const lastBrace = rawText.lastIndexOf('}');
-        
-        if (firstBrace !== -1 && lastBrace !== -1) {
-            jsonString = rawText.substring(firstBrace, lastBrace + 1);
-        } else {
-             // Fallback cleanup
-             jsonString = rawText.replace(/```json|```/g, '').trim();
-        }
-
-        const responseData = JSON.parse(jsonString);
+        // Call Service
+        const responseData = await aiCoach.sendMessage(currentInput, imageBase64, history, context);
         
         setIsTyping(false);
         
-        // 6. Handle Logic
+        // --- LOGIC: INTENT HANDLING ---
+
+        // 1. Intent: Advice -> Text Only
+        if (responseData.intent === 'advice') {
+            addAiMessage(responseData.message);
+            return;
+        }
+
+        // 2. Intent: Log -> Check Sufficiency
+        // If not sufficient, show questions options
         if (!responseData.is_sufficient) {
-            // Case: Need more info - Provide Options if available
             addAiMessage(
-                responseData.missing_info_question || "資訊不足，請補充細節。",
+                responseData.message || "資訊不足，請補充細節。",
                 responseData.inquiry_options || []
             );
-        } else {
-            // Case: Success
-            // Show Coach Lecture
-            addAiMessage(responseData.coach_lecture || "分析完成。");
-            
-            // Show Data Card
+            return;
+        }
+
+        // 3. Intent: Log + Sufficient -> Show Card
+        addAiMessage(responseData.message || "分析完成。");
+        
+        // STRICT CONDITION: Only show card if intent is 'log' AND foodData exists.
+        if (responseData.intent === 'log' && responseData.foodData) {
             setTimeout(() => {
                 addAiMessage("", [], {
-                    foodName: responseData.food_name || "Unknown",
-                    ingredients: responseData.ingredients_breakdown || "N/A",
-                    calories: responseData.nutrition?.calories || 0,
-                    price: responseData.price || 0,
-                    macros: responseData.nutrition || { protein: 0, carbs: 0, fat: 0 }
+                    foodName: responseData.foodData?.name || "Unknown",
+                    ingredients: responseData.foodData?.ingredients || "N/A",
+                    calories: responseData.foodData?.calories || 0,
+                    price: responseData.foodData?.price || 0,
+                    macros: {
+                        protein: responseData.foodData?.protein || 0,
+                        carbs: responseData.foodData?.carbs || 0,
+                        fat: responseData.foodData?.fat || 0
+                    }
                 });
             }, 600);
+        } else {
+            // Fallback for weird edge cases
+            if (responseData.intent === 'log' && !responseData.foodData) {
+                 addAiMessage("收到，但我無法讀取詳細數據。請重試。");
+            }
         }
 
     } catch (error: any) {
-        console.error("Gemini Error:", error);
+        console.error("Coach Error:", error);
         setIsTyping(false);
-        addErrorMessage("分析錯誤，請確認 API Key 設定或網路連線。");
+        
+        // --- INTERCEPT MISSING KEY ERROR ---
+        if (error.message === "MISSING_API_KEY") {
+            setPendingRequest({ text: currentInput, image: imageBase64 });
+            setShowApiKeyModal(true);
+            return;
+        }
+
+        let errorMsg = error.message || "發生未知錯誤";
+        if (error.message?.includes('403')) errorMsg = "API Key 權限不足或無效 (403)";
+        addErrorMessage(`Coach 暫時無法回應: ${errorMsg}`);
     }
   };
 
@@ -818,6 +776,64 @@ export const LogFoodFlow: React.FC<LogFoodFlowProps> = ({ isOpen, onClose, initi
                                  </button>
                              </div>
                         </div>
+                    </div>
+                )}
+
+                {/* API KEY MISSING MODAL (Gatekeeper) */}
+                {showApiKeyModal && (
+                    <div className="absolute inset-0 z-[70] bg-white/95 backdrop-blur flex flex-col items-center justify-center p-6 text-center animate-fade-in">
+                        <div className="bg-brand-black p-4 rounded-full text-brand-green mb-4 shadow-lg shadow-brand-green/20">
+                            <Key size={32} strokeWidth={2.5} />
+                        </div>
+                        <h3 className="text-2xl font-black text-brand-black mb-2">需要 API Key</h3>
+                        <p className="text-gray-500 font-bold text-sm mb-6 max-w-xs leading-relaxed">
+                            AI 教練功能需要您的 Gemini API Key 才能運作。請輸入您的 Key 以繼續。
+                        </p>
+                        
+                        <div className="w-full max-w-xs space-y-4">
+                            <input
+                                type="password"
+                                value={tempApiKey}
+                                onChange={(e) => setTempApiKey(e.target.value)}
+                                placeholder="貼上 AIza 開頭的 Key..."
+                                className="w-full bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold text-lg outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 transition-all text-center"
+                            />
+                            
+                            <button
+                                onClick={() => {
+                                    if(tempApiKey.trim().length > 10) {
+                                        aiService.saveApiKey(tempApiKey.trim());
+                                        setShowApiKeyModal(false);
+                                        // Retry the pending request immediately
+                                        if (pendingRequest) {
+                                            analyzeWithGemini(pendingRequest.text, pendingRequest.image);
+                                            setPendingRequest(null);
+                                        }
+                                    } else {
+                                        alert("API Key 格式似乎不正確");
+                                    }
+                                }}
+                                className="w-full bg-brand-black text-brand-green py-4 rounded-2xl font-black text-lg shadow-lg active:scale-95 transition-transform hover:shadow-brand-green/20"
+                            >
+                                儲存並重試
+                            </button>
+                            
+                            <button 
+                                onClick={() => { setShowApiKeyModal(false); setPendingRequest(null); }} 
+                                className="text-gray-400 font-bold text-sm hover:text-gray-600 transition-colors"
+                            >
+                                取消
+                            </button>
+                        </div>
+                        
+                        <a 
+                            href="https://aistudio.google.com/app/apikey" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="mt-8 text-[10px] font-bold text-brand-green bg-brand-black/5 px-3 py-1 rounded-full flex items-center gap-1 hover:bg-brand-black/10 transition-colors"
+                        >
+                            沒有 Key? 前往 Google AI Studio 獲取 <ArrowLeft className="rotate-180" size={10} />
+                        </a>
                     </div>
                 )}
 

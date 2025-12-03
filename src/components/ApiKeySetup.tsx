@@ -1,6 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
-import { Key, Globe, Check, Copy, ExternalLink, Shield, LogOut, Zap, LayoutGrid, Terminal } from 'lucide-react';
+import { Key, Globe, Check, ExternalLink, Shield, LogOut, Zap, LayoutGrid, Terminal } from 'lucide-react';
+import { aiService } from '../services/ai';
 
 interface ApiKeySetupProps {
   onComplete: () => void;
@@ -15,8 +15,16 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
   const [isAuthorizing, setIsAuthorizing] = useState(false);
 
   useEffect(() => {
-    const key = localStorage.getItem('gemini_api_key');
-    if (key) setSavedKey(key);
+    // Check if key exists using the service (handles user_gemini_key)
+    if (aiService.isUserKeySet()) {
+        try {
+            const key = aiService.getApiKey();
+            setSavedKey(key);
+        } catch (e) {
+            // Might be env key
+            setSavedKey("ENV_CONFIGURED");
+        }
+    }
   }, []);
 
   const handleManualSave = () => {
@@ -24,7 +32,8 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
       setError('無效的 API Key 格式。通常以 "AIza" 開頭。');
       return;
     }
-    localStorage.setItem('gemini_api_key', inputValue.trim());
+    // Use service to save to the correct key (user_gemini_key)
+    aiService.saveApiKey(inputValue.trim());
     setSavedKey(inputValue.trim());
     setError('');
     setTimeout(() => onComplete(), 500);
@@ -35,12 +44,10 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
     try {
       if ((window as any).aistudio) {
         await (window as any).aistudio.openSelectKey();
-        // Assume success if no error thrown
         onComplete();
       } else {
-        // Fallback for standard web environment mimicking OAuth flow visually
         window.open('https://aistudio.google.com/app/apikey', '_blank');
-        setActiveTab('manual'); // Switch to manual so they can paste it
+        setActiveTab('manual'); 
         setError('請在彈出的視窗中建立 Key，並切換至「手動輸入」分頁貼上。');
       }
     } catch (e) {
@@ -52,7 +59,7 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
   };
 
   const clearKey = () => {
-    localStorage.removeItem('gemini_api_key');
+    aiService.removeApiKey();
     setSavedKey(null);
     setInputValue('');
   };
@@ -61,7 +68,6 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
     <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6 font-nunito">
       <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl animate-fade-in-up border border-gray-100 relative overflow-hidden">
         
-        {/* Header */}
         <div className="text-center mb-8 relative z-10">
           <div className="w-16 h-16 bg-brand-black text-brand-green rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-green/20 transform -rotate-3">
              <Key size={32} strokeWidth={2.5} />
@@ -70,7 +76,6 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
           <p className="text-gray-400 font-bold text-xs mt-2">請設定您的 Google Gemini API Key</p>
         </div>
 
-        {/* Saved State */}
         {savedKey ? (
           <div className="bg-green-50 border border-green-100 rounded-2xl p-6 text-center animate-fade-in">
              <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -95,7 +100,6 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
           </div>
         ) : (
           <>
-            {/* Tabs */}
             <div className="flex bg-gray-50 p-1 rounded-xl mb-6 relative z-10">
               <button
                 onClick={() => setActiveTab('manual')}
@@ -119,7 +123,6 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
               </button>
             </div>
 
-            {/* Manual Tab */}
             {activeTab === 'manual' && (
               <div className="animate-fade-in space-y-4">
                 <div className="bg-gray-50 rounded-2xl p-4 border border-gray-100">
@@ -176,7 +179,6 @@ export const ApiKeySetup: React.FC<ApiKeySetupProps> = ({ onComplete, allowSkip 
               </div>
             )}
 
-            {/* OAuth Tab */}
             {activeTab === 'oauth' && (
               <div className="animate-fade-in text-center py-4">
                  <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">

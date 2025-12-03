@@ -1,25 +1,26 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { auth, db, googleProvider, isFirebaseInitialized } from '../firebaseConfig';
-// Use namespace imports to work around potential TS module resolution issues
+import { auth, db, isFirebaseInitialized } from '../firebaseConfig';
+// Import only what is needed to avoid build warnings
 import * as _firebaseAuth from 'firebase/auth';
 import * as _firebaseFirestore from 'firebase/firestore';
 
+// Destructure safely for environments where firebase module resolution is strict or broken
 const { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
-  signInAnonymously,
-  signInWithPopup,
-  linkWithPopup,
   signOut, 
-  onAuthStateChanged 
+  onAuthStateChanged,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
 } = _firebaseAuth as any;
 
 const { 
   doc, 
   setDoc, 
   onSnapshot,
-  getDoc
+  getDoc 
 } = _firebaseFirestore as any;
 
 // Use fallback type for User to avoid import errors
@@ -28,12 +29,14 @@ type User = any;
 // --- Types ---
 
 export interface UserProfile {
+  displayName: string; 
   height: number; // cm
   weight: number; // kg
   age: number;
   gender: 'male' | 'female';
   activityLevel: number;
   goalType: 'lose_fat' | 'maintain' | 'build_muscle' | 'recomp';
+  coachMode: 'strict' | 'encouraging';
   avatar?: string; 
 }
 
@@ -124,11 +127,8 @@ export interface UserState {
 }
 
 export interface UserContextType extends UserState {
-  login: (email: string, pass: string) => Promise<void>;
+  login: (email: string, pass: string, rememberMe: boolean) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
-  loginWithGoogle: () => Promise<void>;
-  loginAsGuest: () => Promise<void>;
-  upgradeAccount: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -150,12 +150,14 @@ export interface UserContextType extends UserState {
 // --- Defaults ---
 
 const DEFAULT_PROFILE: UserProfile = {
+  displayName: 'Joe',
   height: 175,
   weight: 70,
   age: 25,
   gender: 'male',
   activityLevel: 1.55, 
   goalType: 'recomp',
+  coachMode: 'encouraging'
 };
 
 const DEFAULT_GOALS: UserGoals = {
@@ -236,9 +238,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser: any) => {
         if (currentUser) {
-            // User Logged In (Anonymous or Registered)
+            // User Logged In
             const userDocRef = doc(db, "users", currentUser.uid);
             
+            // Set up real-time listener
             unsubscribeFirestore = onSnapshot(userDocRef, (docSnap: any) => {
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
@@ -247,7 +250,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         user: currentUser,
                         authLoading: false,
                         ...userData,
-                        profile: userData.profile || DEFAULT_PROFILE,
+                        // Merge profile carefully to keep defaults and new fields
+                        profile: { ...DEFAULT_PROFILE, ...(userData.profile || {}) },
                         goals: userData.goals || DEFAULT_GOALS,
                         logs: userData.logs || [],
                         bodyLogs: userData.bodyLogs || [],
@@ -255,12 +259,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         todayStats: calculateTodayStats(userData.logs || [])
                     }));
                 } else {
-                    // New user (or fresh anonymous user) - Data will be initialized by signup/login logic or remains defaults
-                    // We save defaults if they don't exist yet to ensure the doc exists
-                    if (currentUser.isAnonymous) {
-                         // Optional: Auto-create doc for anonymous user so we can write to it immediately
-                         // For now, let's keep local defaults until they act
-                    }
+                    // Document doesn't exist (yet), waiting for creation by signup/init
                     setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
                 }
             }, (error: any) => {
@@ -286,7 +285,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!state.user) return;
       try {
           const userDocRef = doc(db, "users", state.user.uid);
-          // Use setDoc with merge to ensure document exists even if it's the first write
           await setDoc(userDocRef, updates, { merge: true });
       } catch (e) {
           console.error("Error saving to Firestore:", e);
@@ -295,70 +293,37 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Auth Actions ---
   
-  // 1. Email/Password
-  const login = async (email: string, pass: string) => {
+  const login = async (email: string, pass: string, rememberMe: boolean) => {
       if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      
+      try {
+        const mode = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+        await setPersistence(auth, mode);
+      } catch (e) {
+        console.warn("Persistence setting failed, proceeding with default session:", e);
+      }
+      
       await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const signup = async (email: string, pass: string) => {
       if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      await initializeUserData(cred.user.uid);
-  };
-
-  // 2. Google Login
-  const loginWithGoogle = async () => {
-      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
-      const cred = await signInWithPopup(auth, googleProvider);
       
-      // Check if data exists, if not initialize
       const userDocRef = doc(db, "users", cred.user.uid);
-      const userDoc = await getDoc(userDocRef);
+      const docSnap = await getDoc(userDocRef);
       
-      if (!userDoc.exists()) {
-          await initializeUserData(cred.user.uid);
-      }
-  };
-
-  // 3. Guest Login (Anonymous)
-  const loginAsGuest = async () => {
-      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
-      const cred = await signInAnonymously(auth);
-      await initializeUserData(cred.user.uid);
-  };
-
-  // 4. Upgrade Account (Link Anonymous to Google)
-  const upgradeAccount = async () => {
-      if (!auth.currentUser) return;
-      try {
-          await linkWithPopup(auth.currentUser, googleProvider);
-          alert("帳號升級成功！您的資料已保留。");
-      } catch (error: any) {
-          console.error("Upgrade failed:", error);
-          if (error.code === 'auth/credential-already-in-use') {
-              alert("此 Google 帳號已被其他使用者綁定。請先登出再使用 Google 登入。");
-          } else {
-              alert("升級失敗，請重試。");
-          }
-      }
-  };
-
-  const initializeUserData = async (uid: string) => {
-      try {
-          const userDocRef = doc(db, "users", uid);
-          // Only set if document doesn't exist? setDoc with merge is safe for initial fields
+      if (!docSnap.exists()) {
           await setDoc(userDocRef, {
-              profile: DEFAULT_PROFILE,
+              profile: { ...DEFAULT_PROFILE, displayName: email.split('@')[0] }, 
               goals: DEFAULT_GOALS,
               logs: [],
               bodyLogs: [],
               workoutLogs: [],
               hasCompletedOnboarding: false,
               trainingMode: 'rest'
-          }, { merge: true });
-      } catch (e) {
-          console.error("Error initializing user data:", e);
+          });
       }
   };
 
@@ -384,8 +349,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
-    // Optimistic update handled by listener usually, but for instant UI feedback we depend on listener
-    // We send array to firestore
     const newLogs = [...state.logs, newLog];
     saveData({ logs: newLogs });
   };
@@ -491,7 +454,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      login, signup, loginWithGoogle, loginAsGuest, upgradeAccount, logout, 
+      login, signup, logout, 
       updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,

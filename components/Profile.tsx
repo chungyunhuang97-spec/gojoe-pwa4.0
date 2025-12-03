@@ -1,10 +1,11 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { useUser, UserProfile, UserGoals } from '../context/UserContext';
-import { User, Ruler, Weight, Target, Wallet, LogOut, ChevronRight, Settings, Calculator, X, Save, Camera, Edit2 } from 'lucide-react';
+import { useUser, UserProfile } from '../context/UserContext';
+import { User, Ruler, Weight, Target, Wallet, LogOut, Settings, Calculator, Save, Camera, Edit2, ChevronRight, X, Key, Trash2, Smile, Flame } from 'lucide-react';
+import { aiService } from '../services/ai';
 
 export const Profile: React.FC = () => {
-  const { profile, goals, resetData, updateGoals, updateProfile, recalculateTargets } = useUser();
+  const { profile, goals, updateGoals, updateProfile, recalculateTargets, logout, resetData } = useUser();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [tempBudget, setTempBudget] = useState(goals.budget.daily);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,6 +14,11 @@ export const Profile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<UserProfile>(profile);
   
+  // API Key UI State
+  const [newApiKey, setNewApiKey] = useState("");
+  const [showKeyInput, setShowKeyInput] = useState(false);
+  const hasCustomKey = aiService.isUserKeySet();
+
   // Preview Stats (Real-time calculation)
   const [previewStats, setPreviewStats] = useState<{
       cals: number; protein: number; carbs: number; fat: number;
@@ -86,11 +92,25 @@ export const Profile: React.FC = () => {
   };
 
   const handleSaveProfile = () => {
-      // 1. Update basic profile in context
       updateProfile(editForm);
-      // 2. Trigger TDEE/Macro recalculation logic in context to save permanent targets
       recalculateTargets(editForm);
       setIsEditing(false);
+  };
+
+  const handleSaveApiKey = () => {
+      if (newApiKey.trim().length > 10) {
+          aiService.saveApiKey(newApiKey);
+          setNewApiKey("");
+          setShowKeyInput(false);
+      } else {
+          alert("API Key 格式似乎不正確");
+      }
+  };
+
+  const handleRemoveApiKey = () => {
+      if (window.confirm("確定要移除自訂 Key 嗎？將會使用系統預設 Key。")) {
+          aiService.removeApiKey();
+      }
   };
 
   // Helper to determine display values (Current vs Preview)
@@ -147,30 +167,80 @@ export const Profile: React.FC = () => {
             className="hidden" 
         />
 
-        <h2 className="text-2xl font-black text-gray-800">使用者</h2>
+        {/* Display Name Editor */}
+        {isEditing ? (
+            <div className="flex flex-col items-center mb-2">
+                <label className="text-[10px] font-bold text-gray-400 uppercase">暱稱</label>
+                <input 
+                    type="text"
+                    value={editForm.displayName || ""}
+                    onChange={(e) => setEditForm({...editForm, displayName: e.target.value})}
+                    className="text-2xl font-black text-gray-800 text-center border-b-2 border-brand-green bg-transparent outline-none w-48"
+                    placeholder="輸入姓名"
+                />
+            </div>
+        ) : (
+            <h2 className="text-2xl font-black text-gray-800">
+                {profile.displayName || "User"}
+            </h2>
+        )}
         
         {isEditing ? (
-             <div className="flex gap-2 mt-2">
-                 <select 
-                    value={editForm.gender}
-                    onChange={(e) => setEditForm({...editForm, gender: e.target.value as any})}
-                    className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 outline-none focus:border-brand-green"
-                 >
-                     <option value="male">男</option>
-                     <option value="female">女</option>
-                 </select>
-                 <input 
-                    type="number"
-                    value={editForm.age}
-                    onChange={(e) => setEditForm({...editForm, age: Number(e.target.value)})}
-                    className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 text-center outline-none focus:border-brand-green"
-                 />
-                 <span className="text-xs font-bold text-gray-400 py-1">歲</span>
+             <div className="flex flex-col items-center gap-4 mt-2 w-full">
+                 <div className="flex gap-2">
+                    <select 
+                        value={editForm.gender}
+                        onChange={(e) => setEditForm({...editForm, gender: e.target.value as any})}
+                        className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 outline-none focus:border-brand-green"
+                    >
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                    </select>
+                    <input 
+                        type="number"
+                        value={editForm.age}
+                        onChange={(e) => setEditForm({...editForm, age: Number(e.target.value)})}
+                        className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 text-center outline-none focus:border-brand-green"
+                    />
+                    <span className="text-xs font-bold text-gray-400 py-1">歲</span>
+                 </div>
+
+                 {/* Coach Mode Toggle */}
+                 <div className="bg-gray-50 rounded-xl p-1 flex items-center border border-gray-200">
+                     <button
+                        onClick={() => setEditForm({ ...editForm, coachMode: 'encouraging' })}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                            editForm.coachMode === 'encouraging' 
+                            ? 'bg-white text-green-600 shadow-sm' 
+                            : 'text-gray-400'
+                        }`}
+                     >
+                         <Smile size={14} /> 天使模式 (鼓勵)
+                     </button>
+                     <button
+                        onClick={() => setEditForm({ ...editForm, coachMode: 'strict' })}
+                        className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
+                            editForm.coachMode === 'strict' 
+                            ? 'bg-white text-red-500 shadow-sm' 
+                            : 'text-gray-400'
+                        }`}
+                     >
+                         <Flame size={14} /> 魔鬼模式 (嚴格)
+                     </button>
+                 </div>
              </div>
         ) : (
-            <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full mt-2 uppercase tracking-wide">
-                {profile.gender === 'male' ? '男' : '女'} • {profile.age} 歲
-            </span>
+            <div className="flex flex-col items-center mt-2 gap-1">
+                <span className="text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded-full uppercase tracking-wide">
+                    {profile.gender === 'male' ? '男' : '女'} • {profile.age} 歲
+                </span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
+                    profile.coachMode === 'strict' ? 'text-red-500 bg-red-50' : 'text-green-600 bg-green-50'
+                }`}>
+                    {profile.coachMode === 'strict' ? <Flame size={10} /> : <Smile size={10} />}
+                    {profile.coachMode === 'strict' ? 'Coach Style: Strict' : 'Coach Style: Encouraging'}
+                </span>
+            </div>
         )}
       </div>
 
@@ -300,6 +370,46 @@ export const Profile: React.FC = () => {
              <Settings size={20} className="text-gray-300" />
          </button>
 
+         {/* API Key Section */}
+         <div className="w-full bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-5">
+             <div className="flex items-center justify-between mb-4">
+                 <div className="flex items-center gap-4">
+                     <div className="p-3 bg-gray-50 rounded-full text-gray-500">
+                         <Key size={20} />
+                     </div>
+                     <div className="text-left">
+                         <span className="block font-bold text-gray-800">API Key 設定</span>
+                         <span className="text-xs text-gray-400 font-semibold">
+                             {hasCustomKey ? "目前使用：自訂 Key" : "目前使用：系統預設"}
+                         </span>
+                     </div>
+                 </div>
+                 <button onClick={() => setShowKeyInput(!showKeyInput)} className="text-xs font-bold text-brand-green bg-brand-black px-3 py-1.5 rounded-full">
+                     {showKeyInput ? '取消' : '變更'}
+                 </button>
+             </div>
+             
+             {showKeyInput && (
+                 <div className="animate-fade-in bg-gray-50 p-4 rounded-xl">
+                     <input 
+                        type="password"
+                        value={newApiKey}
+                        onChange={(e) => setNewApiKey(e.target.value)}
+                        placeholder="輸入新的 Gemini API Key..."
+                        className="w-full bg-white border border-gray-200 rounded-lg p-3 text-sm font-bold mb-3 focus:outline-none focus:border-brand-green"
+                     />
+                     <button onClick={handleSaveApiKey} className="w-full bg-brand-black text-brand-green py-2 rounded-lg font-bold text-sm mb-2">
+                         儲存 Key
+                     </button>
+                     {hasCustomKey && (
+                         <button onClick={handleRemoveApiKey} className="w-full flex items-center justify-center gap-1 text-red-400 text-xs font-bold py-2 hover:text-red-500">
+                             <Trash2 size={12} /> 移除自訂 Key (恢復預設)
+                         </button>
+                     )}
+                 </div>
+             )}
+         </div>
+
          <button 
             onClick={() => {
                 if(window.confirm('確定要重置所有數據並重新設定嗎？此動作無法復原。')) {
@@ -316,11 +426,18 @@ export const Profile: React.FC = () => {
              </div>
              <ChevronRight size={20} className="text-red-200" />
          </button>
+
+         <button 
+            onClick={logout}
+            className="w-full p-4 text-center text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+         >
+             登出
+         </button>
       </div>
 
       {/* Footer Version */}
       <div className="text-center pb-24">
-          <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Go Joe! v1.1.0</p>
+          <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Go Joe! v1.5.0</p>
       </div>
 
       {/* Budget Edit Modal (Local) */}

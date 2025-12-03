@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Wallet, AlertCircle } from 'lucide-react';
 import { UserGoals, DailyStats } from '../context/UserContext';
@@ -74,7 +75,7 @@ export const BudgetCard: React.FC<Props> = ({ goals, stats }) => {
                     {Object.entries(goals.budget.breakdown).map(([meal, amount]) => (
                         <div key={meal} className="bg-gray-50 rounded-lg p-1.5 text-center">
                             <span className="block text-[9px] text-gray-400 uppercase font-bold mb-1">{meal.slice(0,1)}</span>
-                            <span className="block text-xs font-black text-gray-700">${amount}</span>
+                            <span className="block text-xs font-black text-gray-700">${amount as number}</span>
                         </div>
                     ))}
                 </div>

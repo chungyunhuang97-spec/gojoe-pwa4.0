@@ -71,7 +71,7 @@ const MainApp: React.FC = () => {
   // Check for API Key on mount (LocalStorage OR Injected)
   useEffect(() => {
     const checkKey = async () => {
-      const storedKey = localStorage.getItem('gemini_api_key');
+      const storedKey = localStorage.getItem('user_gemini_key'); // Updated key
       const envKey = process.env.API_KEY;
       
       // If we have a stored key OR if the environment has one injected

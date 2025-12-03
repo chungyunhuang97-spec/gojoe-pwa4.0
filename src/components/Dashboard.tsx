@@ -6,6 +6,7 @@ import { NutritionOverview } from './NutritionOverview';
 import { BudgetCard } from './BudgetCard';
 import { CameraModal } from './CameraModal';
 import { GoogleGenAI } from "@google/genai";
+import { aiService } from '../services/ai';
 
 // --- Types & Helpers ---
 type TabType = 'status' | 'budget';
@@ -172,22 +173,12 @@ export const Dashboard: React.FC = () => {
       else addUserMessage(currentInput);
 
       try {
-          // 安全地讀取 API Key，添加多層檢查
-          let apiKey: string | null = null;
-          try {
-              apiKey = localStorage.getItem('gemini_api_key');
-          } catch (e) {
-              console.warn("localStorage 不可用:", e);
+          const apiKey = aiService.getApiKey();
+          if (!apiKey) {
+             throw new Error("Missing API Key");
           }
 
-          // Debug log (safe: not logging full key)
-          console.log("API Key Retrieval Status:", apiKey ? "Found (length: " + apiKey.length + ")" : "Not Found");
-
-          if (!apiKey || apiKey.trim() === '') {
-             throw new Error("API Key 未設置。請在設定中輸入你的 Gemini API Key。");
-          }
-
-          const ai = new GoogleGenAI({ apiKey: apiKey.trim() });
+          const ai = new GoogleGenAI({ apiKey });
           
           // Get today's workout for context
           const todayDate = new Date().toISOString().split('T')[0];

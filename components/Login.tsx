@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useUser } from '../context/UserContext';
-import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react';
+import { Mail, Lock, Loader2, ArrowRight, CheckSquare, Square } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { login, signup } = useUser();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -23,7 +24,7 @@ export const Login: React.FC = () => {
         if (isSignUp) {
             await signup(email, password);
         } else {
-            await login(email, password);
+            await login(email, password, rememberMe);
         }
     } catch (err: any) {
         console.error(err);
@@ -95,6 +96,20 @@ export const Login: React.FC = () => {
                   />
               </div>
           </div>
+
+          {!isSignUp && (
+              <div 
+                className="flex items-center gap-2 cursor-pointer ml-1" 
+                onClick={() => setRememberMe(!rememberMe)}
+              >
+                  {rememberMe ? (
+                      <CheckSquare size={18} className="text-brand-green bg-brand-black rounded" />
+                  ) : (
+                      <Square size={18} className="text-gray-300" />
+                  )}
+                  <span className="text-xs font-bold text-gray-500">記住我 (保持登入)</span>
+              </div>
+          )}
 
           {error && (
               <div className="bg-red-50 text-red-500 text-xs font-bold p-3 rounded-xl border border-red-100 text-center">

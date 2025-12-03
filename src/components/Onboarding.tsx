@@ -78,7 +78,7 @@ export const Onboarding: React.FC = () => {
       const newBreakdown = { ...budgetBreakdown, [key]: val };
       setBudgetBreakdown(newBreakdown);
       // Update total to match sum of parts
-      setLocalBudget(Object.values(newBreakdown).reduce((a: number, b: number) => a + b, 0));
+      setLocalBudget((Object.values(newBreakdown) as number[]).reduce((a: number, b: number) => a + b, 0));
   };
 
   // --- Calorie & Macro Logic ---
@@ -434,7 +434,7 @@ export const Onboarding: React.FC = () => {
                                 </span>
                                 <input 
                                     type="number"
-                                    value={val}
+                                    value={val as number}
                                     onChange={(e) => handleBreakdownChange(key as keyof BudgetBreakdown, Number(e.target.value))}
                                     className="w-full text-xl font-extrabold text-brand-black focus:outline-none border-b border-transparent focus:border-brand-green"
                                 />
