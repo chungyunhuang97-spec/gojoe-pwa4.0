@@ -1,20 +1,28 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { auth, db, isFirebaseInitialized } from '../src/firebaseConfig';
-import { 
+import { doc as doc_, setDoc as setDoc_, updateDoc as updateDoc_, onSnapshot as onSnapshot_, getDoc as getDoc_ } from 'firebase/firestore'; 
+// Use namespace imports to avoid "Module has no exported member" errors in some environments
+import * as _firebaseAuth from 'firebase/auth';
+import * as _firebaseFirestore from 'firebase/firestore';
+
+const { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
-  onAuthStateChanged,
-  User 
-} from 'firebase/auth';
-import { 
+  onAuthStateChanged 
+} = _firebaseAuth as any;
+
+const { 
   doc, 
   setDoc, 
   updateDoc, 
   onSnapshot, 
   getDoc 
-} from 'firebase/firestore';
+} = _firebaseFirestore as any;
+
+// Fallback type for User
+type User = any;
 
 // --- Types ---
 
@@ -212,12 +220,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     let unsubscribeFirestore: (() => void) | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser: any) => {
         if (currentUser) {
             // User Logged In - Set up Firestore Listener
             const userDocRef = doc(db, "users", currentUser.uid);
             
-            unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+            unsubscribeFirestore = onSnapshot(userDocRef, (docSnap: any) => {
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
                     setState(prev => ({
@@ -237,7 +245,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // New user in Auth but no data in Firestore yet (rare, but handled)
                     setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
                 }
-            }, (error) => {
+            }, (error: any) => {
                 console.error("Firestore Listen Error:", error);
                 setState(prev => ({ ...prev, authLoading: false }));
             });

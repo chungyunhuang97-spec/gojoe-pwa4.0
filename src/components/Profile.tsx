@@ -1,10 +1,10 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { useUser, UserProfile, UserGoals } from '../context/UserContext';
-import { User, Ruler, Weight, Target, Wallet, LogOut, ChevronRight, Settings, Calculator, X, Save, Camera, Edit2, AlertTriangle } from 'lucide-react';
+import { User, Ruler, Weight, Target, Wallet, LogOut, ChevronRight, Settings, Calculator, X, Save, Camera, Edit2, AlertTriangle, UserPlus } from 'lucide-react';
 
 export const Profile: React.FC = () => {
-  const { profile, goals, resetData, updateGoals, updateProfile, recalculateTargets, isGuest, logout } = useUser();
+  const { profile, goals, user, resetData, updateGoals, updateProfile, recalculateTargets, logout, upgradeAccount } = useUser();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [tempBudget, setTempBudget] = useState(goals.budget.daily);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -106,6 +106,8 @@ export const Profile: React.FC = () => {
       fat: goals.targetFat
   };
 
+  const isAnonymous = user?.isAnonymous;
+
   return (
     <div className="h-full overflow-y-auto no-scrollbar px-5 py-6 space-y-8 animate-fade-in relative pb-32">
       
@@ -147,9 +149,12 @@ export const Profile: React.FC = () => {
             className="hidden" 
         />
 
-        <h2 className="text-2xl font-black text-gray-800">
-            {isGuest ? "訪客 (Guest)" : "使用者"}
-        </h2>
+        <div className="flex items-center gap-2">
+            <h2 className="text-2xl font-black text-gray-800">
+                {isAnonymous ? "訪客" : (user?.displayName || "使用者")}
+            </h2>
+            {isAnonymous && <span className="bg-gray-200 text-gray-600 text-[10px] px-2 py-0.5 rounded font-bold">GUEST</span>}
+        </div>
         
         {isEditing ? (
              <div className="flex gap-2 mt-2">
@@ -176,16 +181,22 @@ export const Profile: React.FC = () => {
         )}
       </div>
 
-      {/* Guest Mode Warning */}
-      {isGuest && (
-          <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-2xl flex items-start gap-3">
-              <AlertTriangle className="text-yellow-600 shrink-0" size={20} />
-              <div>
-                  <h4 className="font-bold text-yellow-800 text-sm">訪客模式</h4>
-                  <p className="text-xs text-yellow-700 mt-1">
-                      您的資料僅儲存在此瀏覽器中。若清除快取，資料將會遺失。請盡快註冊以同步資料。
-                  </p>
+      {/* Guest Mode Upgrade Banner */}
+      {isAnonymous && (
+          <div className="bg-blue-50 border border-blue-200 p-4 rounded-2xl flex flex-col items-center text-center gap-3 animate-fade-in-up">
+              <div className="flex items-center gap-2 text-blue-700">
+                  <AlertTriangle size={20} />
+                  <h4 className="font-black text-sm">此為臨時訪客帳號</h4>
               </div>
+              <p className="text-xs text-blue-600 font-medium">
+                  若登出或清除瀏覽器資料，您的紀錄將會永久遺失。請綁定 Google 帳號以永久保存資料。
+              </p>
+              <button 
+                  onClick={upgradeAccount}
+                  className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold text-xs shadow-lg shadow-blue-200 active:scale-95 transition-all flex items-center gap-2"
+              >
+                  <UserPlus size={14} /> 綁定 Google 帳號
+              </button>
           </div>
       )}
 
@@ -315,33 +326,26 @@ export const Profile: React.FC = () => {
              <Settings size={20} className="text-gray-300" />
          </button>
 
-         {isGuest && (
-             <div className="p-4 text-center">
-                 <p className="text-xs text-gray-400 mb-2">想要雲端備份資料？</p>
-                 <button onClick={logout} className="text-brand-green font-bold text-sm bg-brand-black px-4 py-2 rounded-full">
-                     登出並註冊帳號
-                 </button>
+         <button 
+            onClick={() => {
+                if(window.confirm('確定要重置所有數據並重新設定嗎？此動作無法復原。')) {
+                    resetData();
+                }
+            }}
+            className="w-full flex items-center justify-between p-5 bg-red-50/50 rounded-[1.5rem] active:scale-95 transition-transform group hover:bg-red-50 border border-red-100/50"
+         >
+             <div className="flex items-center gap-4">
+                 <div className="p-3 bg-white rounded-full text-red-400 group-hover:text-red-500 transition-colors shadow-sm">
+                     <LogOut size={20} />
+                 </div>
+                 <span className="block font-bold text-red-400 group-hover:text-red-500 transition-colors">重置並重新設定</span>
              </div>
-         )}
-
-         {!isGuest && (
-            <button 
-                onClick={() => {
-                    if(window.confirm('確定要重置所有數據並重新設定嗎？此動作無法復原。')) {
-                        resetData();
-                    }
-                }}
-                className="w-full flex items-center justify-between p-5 bg-red-50/50 rounded-[1.5rem] active:scale-95 transition-transform group hover:bg-red-50 border border-red-100/50"
-            >
-                <div className="flex items-center gap-4">
-                    <div className="p-3 bg-white rounded-full text-red-400 group-hover:text-red-500 transition-colors shadow-sm">
-                        <LogOut size={20} />
-                    </div>
-                    <span className="block font-bold text-red-400 group-hover:text-red-500 transition-colors">重置並重新設定</span>
-                </div>
-                <ChevronRight size={20} className="text-red-200" />
-            </button>
-         )}
+             <ChevronRight size={20} className="text-red-200" />
+         </button>
+         
+         <button onClick={logout} className="w-full p-4 text-center text-sm font-bold text-gray-400 hover:text-gray-600">
+             {isAnonymous ? "退出訪客模式" : "登出"}
+         </button>
       </div>
 
       {/* Footer Version */}

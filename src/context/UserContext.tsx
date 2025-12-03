@@ -1,18 +1,29 @@
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { auth, db, isFirebaseInitialized } from '../firebaseConfig';
-import { 
+import { auth, db, googleProvider, isFirebaseInitialized } from '../firebaseConfig';
+// Use namespace imports to work around potential TS module resolution issues
+import * as _firebaseAuth from 'firebase/auth';
+import * as _firebaseFirestore from 'firebase/firestore';
+
+const { 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
+  signInAnonymously,
+  signInWithPopup,
+  linkWithPopup,
   signOut, 
-  onAuthStateChanged,
-  User 
-} from 'firebase/auth';
-import { 
+  onAuthStateChanged 
+} = _firebaseAuth as any;
+
+const { 
   doc, 
   setDoc, 
-  onSnapshot
-} from 'firebase/firestore';
+  onSnapshot,
+  getDoc
+} = _firebaseFirestore as any;
+
+// Use fallback type for User to avoid import errors
+type User = any;
 
 // --- Types ---
 
@@ -99,8 +110,7 @@ export interface DailyStats {
 }
 
 export interface UserState {
-  user: User | null; // Firebase Auth User (or Mock for Guest)
-  isGuest: boolean;
+  user: User | null; 
   authLoading: boolean;
   hasCompletedOnboarding: boolean;
   profile: UserProfile;
@@ -116,7 +126,9 @@ export interface UserState {
 export interface UserContextType extends UserState {
   login: (email: string, pass: string) => Promise<void>;
   signup: (email: string, pass: string) => Promise<void>;
-  loginAsGuest: () => void;
+  loginWithGoogle: () => Promise<void>;
+  loginAsGuest: () => Promise<void>;
+  upgradeAccount: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -172,7 +184,6 @@ const DEFAULT_STATS: DailyStats = {
 
 const DEFAULT_STATE: UserState = {
   user: null,
-  isGuest: false,
   authLoading: true,
   hasCompletedOnboarding: false,
   profile: DEFAULT_PROFILE,
@@ -216,26 +227,6 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 1. Auth & Data Listener
   useEffect(() => {
-    // Guest Mode Check (LocalStorage Persistence)
-    const guestData = localStorage.getItem('gojoe_guest_data');
-    if (guestData && !state.user) {
-        try {
-            const parsed = JSON.parse(guestData);
-            setState(prev => ({
-                ...prev,
-                ...parsed,
-                user: { uid: 'guest', email: 'guest@gojoe.app' } as User,
-                isGuest: true,
-                authLoading: false,
-                todayStats: calculateTodayStats(parsed.logs || [])
-            }));
-            return;
-        } catch (e) {
-            console.error("Failed to load guest data", e);
-        }
-    }
-
-    // Normal Firebase Flow
     if (!isFirebaseInitialized) {
         setState(prev => ({ ...prev, authLoading: false }));
         return;
@@ -243,18 +234,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let unsubscribeFirestore: (() => void) | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser: any) => {
         if (currentUser) {
-            // User Logged In - Set up Firestore Listener
+            // User Logged In (Anonymous or Registered)
             const userDocRef = doc(db, "users", currentUser.uid);
             
-            unsubscribeFirestore = onSnapshot(userDocRef, (docSnap) => {
+            unsubscribeFirestore = onSnapshot(userDocRef, (docSnap: any) => {
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
                     setState(prev => ({
                         ...prev,
                         user: currentUser,
-                        isGuest: false,
                         authLoading: false,
                         ...userData,
                         profile: userData.profile || DEFAULT_PROFILE,
@@ -265,19 +255,23 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         todayStats: calculateTodayStats(userData.logs || [])
                     }));
                 } else {
-                    setState(prev => ({ ...prev, user: currentUser, isGuest: false, authLoading: false }));
+                    // New user (or fresh anonymous user) - Data will be initialized by signup/login logic or remains defaults
+                    // We save defaults if they don't exist yet to ensure the doc exists
+                    if (currentUser.isAnonymous) {
+                         // Optional: Auto-create doc for anonymous user so we can write to it immediately
+                         // For now, let's keep local defaults until they act
+                    }
+                    setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
                 }
-            }, (error) => {
+            }, (error: any) => {
                 console.error("Firestore Listen Error:", error);
                 setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
             });
 
         } else {
-            // User Logged Out (and not guest)
+            // User Logged Out
             if (unsubscribeFirestore) unsubscribeFirestore();
-            if (!state.isGuest) {
-                setState(prev => ({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized }));
-            }
+            setState(prev => ({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized }));
         }
     });
 
@@ -289,34 +283,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Unified Data Saving ---
   const saveData = async (updates: Partial<UserState>) => {
-      // 1. Guest Mode: Save to LocalStorage
-      if (state.isGuest) {
-          const newState = { ...state, ...updates };
-          // Don't save transient session flags or user object
-          const { user, isGuest, authLoading, isFirebaseReady, todayStats, ...storageData } = newState;
-          localStorage.setItem('gojoe_guest_data', JSON.stringify(storageData));
-          
-          // Update Local State immediately
-          setState(prev => ({
-              ...prev,
-              ...updates,
-              todayStats: updates.logs ? calculateTodayStats(updates.logs) : prev.todayStats
-          }));
-          return;
-      }
-
-      // 2. User Mode: Save to Firestore
       if (!state.user) return;
       try {
           const userDocRef = doc(db, "users", state.user.uid);
+          // Use setDoc with merge to ensure document exists even if it's the first write
           await setDoc(userDocRef, updates, { merge: true });
-          // Note: Firestore listener will auto-update state
       } catch (e) {
           console.error("Error saving to Firestore:", e);
       }
   };
 
   // --- Auth Actions ---
+  
+  // 1. Email/Password
   const login = async (email: string, pass: string) => {
       if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
       await signInWithEmailAndPassword(auth, email, pass);
@@ -324,11 +303,51 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signup = async (email: string, pass: string) => {
       if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
-      
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
+      await initializeUserData(cred.user.uid);
+  };
+
+  // 2. Google Login
+  const loginWithGoogle = async () => {
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      const cred = await signInWithPopup(auth, googleProvider);
       
+      // Check if data exists, if not initialize
+      const userDocRef = doc(db, "users", cred.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      if (!userDoc.exists()) {
+          await initializeUserData(cred.user.uid);
+      }
+  };
+
+  // 3. Guest Login (Anonymous)
+  const loginAsGuest = async () => {
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      const cred = await signInAnonymously(auth);
+      await initializeUserData(cred.user.uid);
+  };
+
+  // 4. Upgrade Account (Link Anonymous to Google)
+  const upgradeAccount = async () => {
+      if (!auth.currentUser) return;
       try {
-          const userDocRef = doc(db, "users", cred.user.uid);
+          await linkWithPopup(auth.currentUser, googleProvider);
+          alert("帳號升級成功！您的資料已保留。");
+      } catch (error: any) {
+          console.error("Upgrade failed:", error);
+          if (error.code === 'auth/credential-already-in-use') {
+              alert("此 Google 帳號已被其他使用者綁定。請先登出再使用 Google 登入。");
+          } else {
+              alert("升級失敗，請重試。");
+          }
+      }
+  };
+
+  const initializeUserData = async (uid: string) => {
+      try {
+          const userDocRef = doc(db, "users", uid);
+          // Only set if document doesn't exist? setDoc with merge is safe for initial fields
           await setDoc(userDocRef, {
               profile: DEFAULT_PROFILE,
               goals: DEFAULT_GOALS,
@@ -337,44 +356,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
               workoutLogs: [],
               hasCompletedOnboarding: false,
               trainingMode: 'rest'
-          });
+          }, { merge: true });
       } catch (e) {
           console.error("Error initializing user data:", e);
       }
   };
 
-  const loginAsGuest = () => {
-      const guestState = {
-          profile: DEFAULT_PROFILE,
-          goals: DEFAULT_GOALS,
-          logs: [],
-          bodyLogs: [],
-          workoutLogs: [],
-          hasCompletedOnboarding: false,
-          trainingMode: 'rest' as TrainingMode
-      };
-      
-      localStorage.setItem('gojoe_guest_data', JSON.stringify(guestState));
-      
-      setState(prev => ({
-          ...prev,
-          user: { uid: 'guest', email: 'guest@gojoe.app' } as User,
-          isGuest: true,
-          authLoading: false, 
-          ...guestState
-      }));
-  };
-
   const logout = async () => {
-      if (state.isGuest) {
-          localStorage.removeItem('gojoe_guest_data');
-          setState({ ...DEFAULT_STATE, authLoading: false, isFirebaseReady: isFirebaseInitialized });
-      } else {
-          if (auth) await signOut(auth);
-      }
+      await signOut(auth);
   };
 
-  // --- Data Actions (Refactored to use saveData) ---
+  // --- Data Actions ---
 
   const updateProfile = (updates: Partial<UserProfile>) => {
     const newProfile = { ...state.profile, ...updates };
@@ -392,6 +384,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: Date.now().toString(),
       timestamp: Date.now(),
     };
+    // Optimistic update handled by listener usually, but for instant UI feedback we depend on listener
+    // We send array to firestore
     const newLogs = [...state.logs, newLog];
     saveData({ logs: newLogs });
   };
@@ -497,7 +491,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      login, signup, loginAsGuest, logout, updateProfile, updateGoals, 
+      login, signup, loginWithGoogle, loginAsGuest, upgradeAccount, logout, 
+      updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,
       addWorkoutLog, updateWorkoutLog, deleteWorkoutLog, getWorkoutLogByDate,

@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   // 1. Load env from .env files (local dev)
-  const loadedEnv = loadEnv(mode, process.cwd(), '');
+  const loadedEnv = loadEnv(mode, (process as any).cwd(), '');
   
   // 2. Merge with process.env (crucial for Zeabur/CI environments where .env might not exist)
   // We prioritize process.env over loadedEnv to respect deployment settings

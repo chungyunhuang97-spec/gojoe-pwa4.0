@@ -1,94 +1,143 @@
 
-import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import type { Auth } from "firebase/auth";
+import { initializeApp as _initializeApp } from "firebase/app";
+import * as _firebaseApp from "firebase/app";
+import * as _firebaseAuth from "firebase/auth";
+import * as _firebaseFirestore from "firebase/firestore";
 
-// Safe Environment Variable Accessor
-const getEnv = (key: string) => {
+// Workaround for TypeScript errors in environments where firebase module resolution is strict or broken
+// We import as namespace and cast to any to retrieve named exports safely.
+const { initializeApp } = _firebaseApp as any;
+const { 
+  getAuth, 
+  GoogleAuthProvider, 
+  initializeAuth, 
+  inMemoryPersistence, 
+  browserLocalPersistence,
+  signInAnonymously 
+} = _firebaseAuth as any;
+const { getFirestore } = _firebaseFirestore as any;
+
+// Helper to save manual config
+export const saveManualConfig = (newConfig: any) => {
   try {
-    // @ts-ignore
-    if (import.meta && import.meta.env && import.meta.env[key]) {
-      // @ts-ignore
-      return import.meta.env[key];
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('manual_firebase_config', JSON.stringify(newConfig));
+      window.location.reload();
+    }
+  } catch (e) {
+    console.error("Failed to save manual config", e);
+  }
+};
+
+const getManualConfig = () => {
+  try {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('manual_firebase_config');
+      if (stored) return JSON.parse(stored);
     }
   } catch (e) {}
-  return "";
+  return null;
 };
 
-// 1. Try to get manual config from LocalStorage (Fallback for Preview Environments)
-let manualConfig: any = {};
-try {
-    const stored = localStorage.getItem('firebase_manual_config');
-    if (stored) manualConfig = JSON.parse(stored);
-} catch (e) {
-    console.warn("Failed to load manual config", e);
-}
+const manualConfig = getManualConfig();
 
-// 2. Prioritize Environment Variables, then Manual Config
-const config = {
-  apiKey: getEnv('VITE_FIREBASE_API_KEY') || manualConfig.apiKey,
-  authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN') || manualConfig.authDomain,
-  projectId: getEnv('VITE_FIREBASE_PROJECT_ID') || manualConfig.projectId,
-  storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET') || manualConfig.storageBucket,
-  messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID') || manualConfig.messagingSenderId,
-  appId: getEnv('VITE_FIREBASE_APP_ID') || manualConfig.appId
+// --- CORRECT CONFIGURATION (mystical-moon) ---
+// Hardcoded as requested to ensure immediate preview functionality
+const firebaseConfig = {
+  apiKey: "AIzaSyDzT5ZQdYlGu0drWrVbM1ZzaJ_qjHMD6yA",
+  authDomain: "mystical-moon-470013-v2.firebaseapp.com",
+  projectId: "mystical-moon-470013-v2",
+  storageBucket: "mystical-moon-470013-v2.firebasestorage.app",
+  messagingSenderId: "149028327425",
+  appId: "1:149028327425:web:35415800b24fb19a42f000",
+  measurementId: "G-M52MT9BVGN"
 };
+
+// Determine Final Config
+// Use manual if exists (for debugging), otherwise use the hardcoded correct config
+const config = manualConfig || firebaseConfig;
 
 let app;
-// Explicitly type these to avoid "implicitly has type 'any'" errors
-let auth: Auth | any;
+let auth: any;
 let db: any;
 let googleProvider: any;
 let isFirebaseInitialized = false;
 
-// Helper to save manual config from UI
-export const saveManualConfig = (newConfig: any) => {
-    try {
-        localStorage.setItem('firebase_manual_config', JSON.stringify(newConfig));
-        window.location.reload(); // Reload to apply
-    } catch (e) {
-        console.error("Failed to save config", e);
-    }
-};
-
-export const clearManualConfig = () => {
-    localStorage.removeItem('firebase_manual_config');
-    window.location.reload();
-};
+console.log("🔍 Firebase Config Init:", {
+  projectId: config.projectId,
+  usingManual: !!manualConfig
+});
 
 try {
-    // Validation: If apiKey is empty, throw error
-    if (!config.apiKey || config.apiKey === '') {
-        throw new Error("Firebase API Key is empty.");
-    }
+  // 1. Initialize App
+  app = initializeApp(config);
 
-    app = initializeApp(config);
-    auth = getAuth(app);
-    db = getFirestore(app);
-    googleProvider = new GoogleAuthProvider();
-    
-    isFirebaseInitialized = true;
-    console.log("✅ Firebase Initialized Successfully");
+  // 2. Robust Auth Initialization for Iframes/Previews
+  // Preview environments (like AI Studio) block IndexedDB, causing standard getAuth() to crash.
+  // We detect this and force inMemoryPersistence.
+  try {
+    const isPreview = typeof window !== 'undefined' && (
+      window.location.hostname.includes('webcontainer') ||
+      window.location.hostname.includes('googleusercontent') ||
+      window.location.hostname.includes('ai.studio') || 
+      window.location.hostname.includes('scf.usercontent')
+    );
+
+    if (isPreview) {
+      console.log("⚠️ Preview Environment Detected: Using inMemoryPersistence for Auth.");
+      auth = initializeAuth(app, {
+        persistence: inMemoryPersistence
+      });
+    } else {
+      // Standard initialization for production/localhost
+      auth = getAuth(app);
+    }
+  } catch (authError) {
+    console.warn("⚠️ Standard Auth Init failed, falling back to memory persistence:", authError);
+    // Ultimate fallback
+    auth = initializeAuth(app, {
+      persistence: inMemoryPersistence
+    });
+  }
+
+  db = getFirestore(app);
+  googleProvider = new GoogleAuthProvider();
+  
+  isFirebaseInitialized = true;
+  console.log("✅ Firebase Initialized Successfully");
 
 } catch (error) {
-    console.warn("⚠️ Firebase Initialization Error (Preview Mode):", error);
-    
-    // Mock Auth object to prevent white screen crash
-    auth = {
-        currentUser: null,
-        onAuthStateChanged: (callback: any) => {
-            callback(null); 
-            return () => {}; 
-        },
-        signInWithEmailAndPassword: async () => { throw new Error("Firebase not initialized"); },
-        createUserWithEmailAndPassword: async () => { throw new Error("Firebase not initialized"); },
-        signOut: async () => {}
-    };
-    db = {}; // Mock DB
-    googleProvider = {};
-
-    isFirebaseInitialized = false;
+  console.error("🔥 Firebase Critical Initialization Error:", error);
+  
+  // 3. Mock Fallback (Prevent White Screen of Death)
+  let mockCurrentUser: any = null;
+  
+  auth = {
+    currentUser: mockCurrentUser,
+    onAuthStateChanged: (callback: any) => {
+      callback(mockCurrentUser);
+      return () => {}; 
+    },
+    signInWithEmailAndPassword: async () => { throw new Error("Firebase is offline"); },
+    createUserWithEmailAndPassword: async () => { throw new Error("Firebase is offline"); },
+    signInWithPopup: async () => { throw new Error("Google Login unavailable in offline mode"); },
+    signOut: async () => { mockCurrentUser = null; },
+    signInAnonymously: async () => {
+      const guestUid = 'offline-guest-' + Math.random().toString(36).substr(2, 9);
+      mockCurrentUser = {
+        uid: guestUid,
+        isAnonymous: true,
+        email: null,
+        displayName: 'Guest User (Offline)',
+        photoURL: null
+      };
+      return { user: mockCurrentUser };
+    }
+  };
+  
+  db = {}; 
+  googleProvider = {};
+  isFirebaseInitialized = false;
 }
 
 export { auth, db, googleProvider, isFirebaseInitialized };
