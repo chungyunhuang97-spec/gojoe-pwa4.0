@@ -547,6 +547,13 @@ export const Dashboard: React.FC = () => {
       <CameraModal 
           isOpen={isCameraOpen} 
           onClose={() => setIsCameraOpen(false)} 
+          label={
+            cameraMode === 'food'
+              ? '拍攝餐點'
+              : cameraMode === 'workout'
+              ? '檢查動作姿勢'
+              : '體態紀錄'
+          }
           onCapture={(base64: string) => {
               setIsCameraOpen(false);
               setTimeout(() => {

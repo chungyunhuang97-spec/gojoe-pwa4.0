@@ -29,7 +29,7 @@ export const Onboarding: React.FC = () => {
       case 1: return profile.height > 0 && profile.weight > 0 && profile.age > 0;
       case 2: return profile.activityLevel > 0;
       case 3: return !!profile.goalType;
-      case 4: return localBudget > 0;
+      case 4: return localBudget > 0 && !!profile.coachMode;
       default: return false;
     }
   };
@@ -442,6 +442,37 @@ export const Onboarding: React.FC = () => {
                         ))}
                     </div>
                 )}
+             </div>
+
+             {/* Coach Mode Selection */}
+             <div className="mt-2">
+               <p className="text-sm font-extrabold text-brand-black mb-3">教練模式</p>
+               <div className="flex bg-gray-100 rounded-2xl p-1">
+                 <button
+                   type="button"
+                   onClick={() => updateProfile({ coachMode: 'encouraging' })}
+                   className={`flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1 ${
+                     profile.coachMode === 'encouraging'
+                       ? 'bg-white shadow-md text-green-600'
+                       : 'text-gray-500'
+                   }`}
+                 >
+                   <span>😊</span>
+                   <span>天使模式（鼓勵）</span>
+                 </button>
+                 <button
+                   type="button"
+                   onClick={() => updateProfile({ coachMode: 'strict' })}
+                   className={`flex-1 py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-1 ${
+                     profile.coachMode === 'strict'
+                       ? 'bg-white shadow-md text-red-600'
+                       : 'text-gray-500'
+                   }`}
+                 >
+                   <span>🔥</span>
+                   <span>魔鬼模式（嚴格）</span>
+                 </button>
+               </div>
              </div>
           </div>
         )}

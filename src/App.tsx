@@ -134,16 +134,11 @@ const MainApp: React.FC = () => {
           <button onClick={() => setIsMenuOpen(true)} className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-transform active:scale-95">
             <Menu className="w-7 h-7 text-brand-black" strokeWidth={2.5} />
           </button>
-          <div className="flex items-center gap-2 select-none">
-            <div className="w-8 h-8 rounded-2xl bg-brand-black flex items-center justify-center overflow-hidden shadow-sm shadow-brand-green/40">
-              <img src="/logo.png" alt="Go Joe Logo" className="w-7 h-7 object-contain" />
-            </div>
-            <h1 className="text-2xl font-black tracking-tight italic text-brand-black leading-none">
-              GO JOE<span className="text-brand-green">!</span>
-            </h1>
-          </div>
+          <h1 className="text-2xl font-black tracking-tight italic select-none text-brand-black leading-none">
+            GO JOE<span className="text-brand-green">!</span>
+          </h1>
           <button onClick={() => setCurrentView('profile')} className={`p-1 rounded-full transition-transform active:scale-95 overflow-hidden border-2 ${currentView === 'profile' ? 'border-brand-green' : 'border-transparent'}`}>
-            {profile.avatar ? <img src={profile.avatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover" /> : <div className={`p-1 rounded-full ${currentView === 'profile' ? 'bg-brand-green text-brand-black' : 'text-gray-400 bg-gray-100'}`}><User className="w-7 h-7" strokeWidth={2.5} /></div>}
+            {profile.avatar ? <img src={profile.avatar} alt="Avatar" className="w-8 h-8 rounded-full object-cover" /> : <div className={`p-1 rounded-full ${currentView === 'profile' ? 'bg-brand-green text-brand-black' : 'text-gray-400 bg-gray-100'}`}><User className="w-6 h-6" strokeWidth={2.5} /></div>}
           </button>
         </header>
 

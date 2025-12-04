@@ -1,12 +1,10 @@
 
 import React, { useState } from 'react';
 import { useUser } from '../context/UserContext';
-import { Loader2, Key } from 'lucide-react';
-import { aiService } from '../services/ai';
+import { Loader2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
   const { loginWithGoogle } = useUser();
-  const [apiKey, setApiKey] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -15,28 +13,22 @@ export const Login: React.FC = () => {
     setIsLoading(true);
 
     try {
-        // Save API Key to localStorage if provided (optional)
-        if (apiKey.trim()) {
-            aiService.saveApiKey(apiKey.trim());
-        }
-        
-        // Sign in with Google
-        await loginWithGoogle();
+      await loginWithGoogle();
     } catch (err: any) {
-        console.error(err);
-        let msg = "發生錯誤，請稍後再試";
-        if (err.code === 'auth/popup-closed-by-user') {
-            msg = "登入已取消";
-        } else if (err.code === 'auth/popup-blocked') {
-            msg = "彈出視窗被阻擋，請允許彈出視窗後重試";
-        } else if (err.code === 'auth/account-exists-with-different-credential') {
-            msg = "此帳號已使用其他方式註冊";
-        } else {
-            msg = err.message || msg;
-        }
-        setError(msg);
+      console.error(err);
+      let msg = "發生錯誤，請稍後再試";
+      if (err.code === 'auth/popup-closed-by-user') {
+        msg = "登入已取消";
+      } else if (err.code === 'auth/popup-blocked') {
+        msg = "彈出視窗被阻擋，請允許彈出視窗後重試";
+      } else if (err.code === 'auth/account-exists-with-different-credential') {
+        msg = "此帳號已使用其他方式註冊";
+      } else {
+        msg = err.message || msg;
+      }
+      setError(msg);
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -59,29 +51,10 @@ export const Login: React.FC = () => {
         </div>
 
         <div className="w-full space-y-4 animate-fade-in-up">
-          {/* Optional API Key Input */}
-          <div className="space-y-1">
-              <label className="text-xs font-bold text-gray-400 uppercase tracking-wider ml-1">Gemini API Key (選填)</label>
-              <div className="relative">
-                  <div className="absolute left-4 top-3.5 text-gray-400">
-                      <Key size={18} />
-                  </div>
-                  <input 
-                    type="password" 
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full bg-gray-50 border border-gray-200 rounded-2xl py-3 pl-12 pr-4 font-bold text-gray-800 outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 transition-all"
-                    placeholder="AIzaSy..."
-                    disabled={isLoading}
-                  />
-              </div>
-              <p className="text-[10px] text-gray-400 ml-1">若略過，之後可在「個人檔案」中設定。</p>
-          </div>
-
           {error && (
-              <div className="bg-red-50 text-red-500 text-xs font-bold p-3 rounded-xl border border-red-100 text-center">
-                  {error}
-              </div>
+            <div className="bg-red-50 text-red-500 text-xs font-bold p-3 rounded-xl border border-red-100 text-center">
+              {error}
+            </div>
           )}
 
           {/* Google Sign-In Button */}

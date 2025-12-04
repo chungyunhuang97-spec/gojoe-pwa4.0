@@ -5,9 +5,10 @@ interface CameraModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCapture?: (base64: string) => void;
+  label?: string;
 }
 
-export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCapture }) => {
+export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCapture, label }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -84,7 +85,9 @@ export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCap
         <button onClick={onClose} className="p-2 bg-black/50 backdrop-blur text-white rounded-full">
           <X />
         </button>
-        <span className="text-white font-bold tracking-widest text-sm">SCAN FOOD</span>
+        <span className="text-white font-bold tracking-widest text-sm">
+          {label || 'SCANNER'}
+        </span>
         <div className="w-10"></div> 
       </div>
 
