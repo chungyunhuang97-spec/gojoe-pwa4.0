@@ -1,0 +1,7 @@
+{
+  "name": "Go Joe！",
+  "description": "A Nike Run Club inspired fitness and finance tracker.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
