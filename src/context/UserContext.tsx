@@ -7,13 +7,10 @@ import * as _firebaseFirestore from 'firebase/firestore';
 
 // Destructure safely for environments where firebase module resolution is strict or broken
 const { 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence
+  GoogleAuthProvider,
+  signInWithPopup
 } = _firebaseAuth as any;
 
 const { 
@@ -127,8 +124,7 @@ export interface UserState {
 }
 
 export interface UserContextType extends UserState {
-  login: (email: string, pass: string, rememberMe: boolean) => Promise<void>;
-  signup: (email: string, pass: string) => Promise<void>;
+  loginWithGoogle: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -293,37 +289,43 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Auth Actions ---
   
-  const login = async (email: string, pass: string, rememberMe: boolean) => {
+  const loginWithGoogle = async () => {
       if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
       
       try {
-        const mode = rememberMe ? browserLocalPersistence : browserSessionPersistence;
-        await setPersistence(auth, mode);
-      } catch (e) {
-        console.warn("Persistence setting failed, proceeding with default session:", e);
-      }
-      
-      await signInWithEmailAndPassword(auth, email, pass);
-  };
-
-  const signup = async (email: string, pass: string) => {
-      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
-      
-      const cred = await createUserWithEmailAndPassword(auth, email, pass);
-      
-      const userDocRef = doc(db, "users", cred.user.uid);
-      const docSnap = await getDoc(userDocRef);
-      
-      if (!docSnap.exists()) {
-          await setDoc(userDocRef, {
-              profile: { ...DEFAULT_PROFILE, displayName: email.split('@')[0] }, 
-              goals: DEFAULT_GOALS,
-              logs: [],
-              bodyLogs: [],
-              workoutLogs: [],
-              hasCompletedOnboarding: false,
-              trainingMode: 'rest'
-          });
+          const provider = new GoogleAuthProvider();
+          const result = await signInWithPopup(auth, provider);
+          const user = result.user;
+          
+          // CRITICAL DATA SAFETY LOGIC: Check if document exists FIRST
+          const userDocRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(userDocRef);
+          
+          // IF NOT Exists: Only then create the default profile (initialize data)
+          if (!docSnap.exists()) {
+              // Extract display name from Google account
+              const displayName = user.displayName || user.email?.split('@')[0] || 'Joe';
+              const avatar = user.photoURL || undefined;
+              
+              await setDoc(userDocRef, {
+                  profile: { 
+                      ...DEFAULT_PROFILE, 
+                      displayName,
+                      avatar
+                  }, 
+                  goals: DEFAULT_GOALS,
+                  logs: [],
+                  bodyLogs: [],
+                  workoutLogs: [],
+                  hasCompletedOnboarding: false,
+                  trainingMode: 'rest'
+              });
+          }
+          // IF Exists: Do nothing - data will be loaded by the onSnapshot listener
+          // This ensures we NEVER overwrite existing user data
+      } catch (error: any) {
+          console.error("Google Sign-In Error:", error);
+          throw error;
       }
   };
 
@@ -454,7 +456,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      login, signup, logout, 
+      loginWithGoogle, logout, 
       updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,
