@@ -47,8 +47,8 @@ export const Login: React.FC = () => {
 
       <div className="w-full max-w-sm z-10 flex flex-col items-center">
         <div className="mb-10 text-center">
-          <div className="w-24 h-24 bg-brand-black rounded-[2rem] flex items-center justify-center shadow-2xl shadow-brand-green/20 mb-6 mx-auto transform rotate-3">
-             <span className="text-4xl">💪</span>
+          <div className="w-24 h-24 bg-brand-black rounded-[2rem] flex items-center justify-center shadow-2xl shadow-brand-green/20 mb-6 mx-auto transform rotate-3 overflow-hidden">
+             <img src="/logo.png" alt="Go Joe Logo" className="w-20 h-20 object-contain" />
           </div>
           <h1 className="text-4xl font-black italic tracking-tighter text-brand-black mb-2">
             GO JOE<span className="text-brand-green">!</span>

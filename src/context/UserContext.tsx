@@ -86,9 +86,16 @@ export interface WorkoutExercise {
   targetMuscles: string[];
   sets: number;
   reps: number;
-  weight: number; // kg
+  weight: number; // kg（預設重量，可被每組覆寫）
   restTime: number; // seconds
   notes: string;
+  // 進階：每組細節（對應表格中的每一列）
+  setDetails?: {
+    setIndex: number;
+    weight: number;
+    reps: number;
+    done: boolean;
+  }[];
   timestamp: number;
 }
 
@@ -299,27 +306,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // CRITICAL DATA SAFETY LOGIC: Check if document exists FIRST
           const userDocRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(userDocRef);
-          
+      const docSnap = await getDoc(userDocRef);
+      
           // IF NOT Exists: Only then create the default profile (initialize data)
-          if (!docSnap.exists()) {
+      if (!docSnap.exists()) {
               // Extract display name from Google account
               const displayName = user.displayName || user.email?.split('@')[0] || 'Joe';
               const avatar = user.photoURL || undefined;
               
-              await setDoc(userDocRef, {
+          await setDoc(userDocRef, {
                   profile: { 
                       ...DEFAULT_PROFILE, 
                       displayName,
                       avatar
                   }, 
-                  goals: DEFAULT_GOALS,
-                  logs: [],
-                  bodyLogs: [],
-                  workoutLogs: [],
-                  hasCompletedOnboarding: false,
-                  trainingMode: 'rest'
-              });
+              goals: DEFAULT_GOALS,
+              logs: [],
+              bodyLogs: [],
+              workoutLogs: [],
+              hasCompletedOnboarding: false,
+              trainingMode: 'rest'
+          });
           }
           // IF Exists: Do nothing - data will be loaded by the onSnapshot listener
           // This ensures we NEVER overwrite existing user data

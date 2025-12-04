@@ -58,7 +58,7 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
     <div className="flex flex-col items-center justify-center h-full text-gray-400 p-10 text-center">
         <Settings size={48} className="mb-4 opacity-20" />
         <h2 className="text-xl font-black text-gray-300">{title}</h2>
-        <p className="text-sm font-bold mt-2">Coming Soon</p>
+        <p className="text-sm font-bold mt-2">敬請期待</p>
     </div>
 );
 
@@ -84,22 +84,25 @@ const MainApp: React.FC = () => {
     checkKey();
   }, []);
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400 font-bold">Loading...</div>;
+  if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400 font-bold">載入中...</div>;
 
   if (!user) return <Login />;
 
-  // API Key Gate - Must happen before accessing app features
-  // Exception: If user wants to configure API key explicitly (e.g. they cleared it), we show the setup
-  if (!hasApiKey && currentView !== 'apikey') {
+  // --- 新用戶流程判定 ---
+  // hasCompletedOnboarding 為 false 時，視為需要走「API Key → Onboarding」的新用戶流程。
+  const isNewUserFlow = !hasCompletedOnboarding;
+
+  // Step 3：API Key 設定（僅新用戶且尚未設定時會出現）
+  if (isNewUserFlow && !hasApiKey && currentView !== 'apikey') {
     return <ApiKeySetup onComplete={() => setHasApiKey(true)} />;
   }
 
-  // If viewing API Key setup manually from menu
+  // 手動從側邊選單開啟 API Key 設定
   if (currentView === 'apikey') {
      return (
        <div className="min-h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
           <div className="w-full sm:max-w-[420px] bg-white min-h-screen sm:min-h-[850px] sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200">
-             <header className="px-5 pt-12 pb-2 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-[50]">
+             <header className="px-5 pt-12 pb-2 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-50">
                 <button onClick={() => setCurrentView('dashboard')} className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-transform active:scale-95 text-gray-500 font-bold text-sm flex items-center gap-1">
                    <ChevronRight className="rotate-180" size={20} /> 返回
                 </button>
@@ -112,7 +115,8 @@ const MainApp: React.FC = () => {
      );
   }
 
-  if (!hasCompletedOnboarding) {
+  // Step 4：Onboarding 精靈（僅新用戶，且已完成 API Key 設定）
+  if (isNewUserFlow && hasApiKey) {
     return (
        <div className="min-h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
           <div className="w-full sm:max-w-[420px] bg-white min-h-screen sm:min-h-[850px] sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200">
@@ -126,11 +130,20 @@ const MainApp: React.FC = () => {
     <div className="min-h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
       <div className="w-full sm:max-w-[420px] bg-white min-h-screen sm:min-h-[850px] sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200/50">
         
-        <header className="px-5 pt-12 pb-2 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-[50]">
-          <button onClick={() => setIsMenuOpen(true)} className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-transform active:scale-95"><Menu className="w-7 h-7 text-brand-black" strokeWidth={2.5} /></button>
-          <h1 className="text-2xl font-black tracking-tight italic select-none text-brand-black">GO JOE<span className="text-brand-green">!</span></h1>
+        <header className="px-5 pt-12 pb-2 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-50">
+          <button onClick={() => setIsMenuOpen(true)} className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-transform active:scale-95">
+            <Menu className="w-7 h-7 text-brand-black" strokeWidth={2.5} />
+          </button>
+          <div className="flex items-center gap-2 select-none">
+            <div className="w-8 h-8 rounded-2xl bg-brand-black flex items-center justify-center overflow-hidden shadow-sm shadow-brand-green/40">
+              <img src="/logo.png" alt="Go Joe Logo" className="w-7 h-7 object-contain" />
+            </div>
+            <h1 className="text-2xl font-black tracking-tight italic text-brand-black leading-none">
+              GO JOE<span className="text-brand-green">!</span>
+            </h1>
+          </div>
           <button onClick={() => setCurrentView('profile')} className={`p-1 rounded-full transition-transform active:scale-95 overflow-hidden border-2 ${currentView === 'profile' ? 'border-brand-green' : 'border-transparent'}`}>
-            {profile.avatar ? <img src={profile.avatar} alt="Avatar" className="w-9 h-9 rounded-full object-cover" /> : <div className={`p-1 rounded-full ${currentView === 'profile' ? 'bg-brand-green text-brand-black' : 'text-gray-400 bg-gray-100'}`}><User className="w-7 h-7" strokeWidth={2.5} /></div>}
+            {profile.avatar ? <img src={profile.avatar} alt="Avatar" className="w-10 h-10 rounded-full object-cover" /> : <div className={`p-1 rounded-full ${currentView === 'profile' ? 'bg-brand-green text-brand-black' : 'text-gray-400 bg-gray-100'}`}><User className="w-7 h-7" strokeWidth={2.5} /></div>}
           </button>
         </header>
 

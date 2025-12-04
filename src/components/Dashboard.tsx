@@ -7,6 +7,7 @@ import { BudgetCard } from './BudgetCard';
 import { CameraModal } from './CameraModal';
 import { GoogleGenAI } from "@google/genai";
 import { aiService } from '../services/ai';
+import { aiCoach, CoachContext } from '../services/aiCoach';
 
 // --- Types & Helpers ---
 type TabType = 'status' | 'budget';
@@ -82,7 +83,8 @@ export const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('status');
   const [showTrainingModal, setShowTrainingModal] = useState(false);
   const [isCameraOpen, setIsCameraOpen] = useState(false);
-  const [cameraMode, setCameraMode] = useState<'food' | 'body'>('food');
+  const [cameraMode, setCameraMode] = useState<'food' | 'workout' | 'body'>('food');
+  const [showCameraSheet, setShowCameraSheet] = useState(false);
   
   // Edit State
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
@@ -291,6 +293,43 @@ export const Dashboard: React.FC = () => {
       }
   };
 
+  // --- 3b. Workout Form Analysis ---
+  const analyzeWorkoutForm = async (imageBase64: string) => {
+      setIsTyping(true);
+      addUserMessage("", imageBase64);
+
+      try {
+          const todayDate = new Date().toISOString().split('T')[0];
+          const todayWorkout = workoutLogs.find(l => l.date === todayDate);
+
+          const history: any[] = [];
+          const context: CoachContext = {
+              userName: profile.displayName || 'Joe',
+              coachMode: profile.coachMode || 'encouraging',
+              dietPlan: 'training_form_check',
+              targetCalories: goals.targetCalories,
+              currentCalories: todayStats.consumedCalories,
+              remainingCalories: Math.max(0, goals.targetCalories - todayStats.consumedCalories),
+              budgetRemaining: Math.max(0, goals.budget.daily - todayStats.spentBudget),
+              proteinGap: Math.max(0, goals.targetProtein - todayStats.consumedProtein),
+              carbsGap: Math.max(0, goals.targetCarbs - todayStats.consumedCarbs),
+              fatGap: Math.max(0, goals.targetFat - todayStats.consumedFat),
+          };
+
+          const userPrompt = todayWorkout
+            ? `請幫我檢查這個動作的訓練姿勢與安全性，今日訓練部位：${todayWorkout.bodyParts.join(', ')}，動作數：${todayWorkout.exercises.length}。`
+            : '請幫我檢查這個重量訓練動作的姿勢與安全性，並給我具體調整建議。';
+
+          const res = await aiCoach.sendMessage(userPrompt, imageBase64, history, context);
+          setIsTyping(false);
+          addAiMessage(res.message || '已完成動作檢查。');
+      } catch (error: any) {
+          console.error('Workout form check error:', error);
+          setIsTyping(false);
+          addAiMessage('❌ 動作分析失敗：請稍後再試。');
+      }
+  };
+
   const handleSendMessage = () => {
       if (!inputText.trim()) return;
       const text = inputText;
@@ -381,7 +420,7 @@ export const Dashboard: React.FC = () => {
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs font-black text-gray-500 uppercase tracking-wider">線上 (User Key)</span>
+                      <span className="text-xs font-black text-gray-500 tracking-wider">線上（使用者 API Key）</span>
                   </div>
                   <button onClick={() => setShowTrainingModal(true)} className="flex items-center gap-1 text-[10px] text-brand-black font-bold bg-white px-3 py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all">
                       {trainingMode === 'leg' ? '腿日模式' : trainingMode === 'push_pull' ? '推拉模式' : '休息日'}
@@ -410,10 +449,13 @@ export const Dashboard: React.FC = () => {
                   {isTyping && <div className="text-xs text-gray-400 font-bold ml-4 animate-pulse">Coach Joe 正在輸入...</div>}
               </div>
               <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center gap-2">
-                  <div className="flex items-center gap-1">
-                      <button onClick={() => { setCameraMode('food'); setIsCameraOpen(true); }} className="p-2 bg-white rounded-full text-gray-400 hover:text-brand-black border border-gray-200" title="拍食物"><Camera size={18} /></button>
-                      <button onClick={() => { setCameraMode('body'); setIsCameraOpen(true); }} className="p-2 bg-white rounded-full text-gray-400 hover:text-brand-black border border-gray-200" title="拍體態"><Dumbbell size={18} /></button>
-                  </div>
+                  <button
+                    onClick={() => setShowCameraSheet(true)}
+                    className="p-2 bg-white rounded-full text-gray-400 hover:text-brand-black border border-gray-200"
+                    title="拍照"
+                  >
+                    <Camera size={18} />
+                  </button>
                   <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="輸入..." className="flex-1 bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-bold focus:outline-none focus:border-brand-green" />
                   <button onClick={handleSendMessage} disabled={!inputText.trim()} className="p-2 bg-brand-black text-brand-green rounded-full disabled:opacity-50"><ArrowUp size={18} strokeWidth={3} /></button>
               </div>
@@ -476,6 +518,32 @@ export const Dashboard: React.FC = () => {
 
       <TrainingCheckModal isOpen={showTrainingModal} onClose={handleTrainingSet} />
       
+      {/* Chat 相機動作選單 */}
+      {showCameraSheet && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-end justify-center p-4">
+          <div className="bg-white w-full max-w-sm rounded-3xl p-4 space-y-2">
+            <button
+              onClick={() => { setShowCameraSheet(false); setCameraMode('food'); setIsCameraOpen(true); }}
+              className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-transform"
+            >
+              📸 拍食物（紀錄餐點）
+            </button>
+            <button
+              onClick={() => { setShowCameraSheet(false); setCameraMode('workout'); setIsCameraOpen(true); }}
+              className="w-full py-3 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-transform"
+            >
+              🏋️ 拍動作（檢查姿勢）
+            </button>
+            <button
+              onClick={() => setShowCameraSheet(false)}
+              className="w-full py-2 rounded-2xl font-bold text-xs text-gray-400"
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
       <CameraModal 
           isOpen={isCameraOpen} 
           onClose={() => setIsCameraOpen(false)} 
@@ -484,6 +552,8 @@ export const Dashboard: React.FC = () => {
               setTimeout(() => {
                 if (cameraMode === 'food') {
                     analyzeWithGemini("分析這張食物照片", base64);
+                } else if (cameraMode === 'workout') {
+                    analyzeWorkoutForm(base64);
                 } else {
                     const weight = prompt("請輸入目前體重 (kg):", profile.weight.toString());
                     if (weight) {
