@@ -306,22 +306,87 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   // --- Unified Data Saving ---
+  // 确保所有数据都保存到 Firestore，包括访客用户
   const saveData = async (updates: Partial<UserState>) => {
-      if (!state.user) return;
-      
-      // For guest users, update local state immediately
-      if ((state.user as any).isAnonymous) {
-          setState(prev => ({ ...prev, ...updates }));
+      if (!state.user) {
+          console.warn("Cannot save data: No user logged in");
+          return;
       }
       
-      // Try to save to Firestore (but don't fail if it doesn't work for guest users)
+      // 先更新本地状态（立即反馈）
+      const newState = { ...state, ...updates };
+      setState(newState);
+      
+      // 检查是否是使用 localStorage 的访客用户（fallback 方案）
+      const isLocalStorageGuest = (state.user as any).isAnonymous && 
+                                  state.user.uid.startsWith('guest_') && 
+                                  !state.user.uid.includes('firebase');
+      
+      if (isLocalStorageGuest) {
+          // 使用 localStorage 保存（fallback 方案）
+          const guestUid = state.user.uid;
+          const dataToSave = {
+              profile: newState.profile,
+              goals: newState.goals,
+              logs: newState.logs,
+              bodyLogs: newState.bodyLogs,
+              workoutLogs: newState.workoutLogs,
+              hasCompletedOnboarding: newState.hasCompletedOnboarding,
+              trainingMode: newState.trainingMode
+          };
+          try {
+              localStorage.setItem(`guest_data_${guestUid}`, JSON.stringify(dataToSave));
+              console.log('Data saved to localStorage for guest user');
+          } catch (e) {
+              console.error("Failed to save to localStorage:", e);
+          }
+          return;
+      }
+      
+      // 保存到 Firestore（正常用户和 Firebase 匿名用户）
       try {
           const userDocRef = doc(db, "users", state.user.uid);
-          await setDoc(userDocRef, updates, { merge: true });
-      } catch (e) {
-          // For guest users, this is expected - data is stored locally
-          if (!(state.user as any).isAnonymous) {
-              console.error("Error saving to Firestore:", e);
+          
+          // 合并当前状态和更新，确保数据完整
+          const dataToSave = {
+              ...updates,
+              // 确保关键字段存在
+              profile: updates.profile || newState.profile,
+              goals: updates.goals || newState.goals,
+              logs: updates.logs !== undefined ? updates.logs : newState.logs,
+              bodyLogs: updates.bodyLogs !== undefined ? updates.bodyLogs : newState.bodyLogs,
+              workoutLogs: updates.workoutLogs !== undefined ? updates.workoutLogs : newState.workoutLogs,
+              hasCompletedOnboarding: updates.hasCompletedOnboarding !== undefined ? updates.hasCompletedOnboarding : newState.hasCompletedOnboarding,
+              trainingMode: updates.trainingMode || newState.trainingMode
+          };
+          
+          await setDoc(userDocRef, dataToSave, { merge: true });
+          console.log('✅ Data saved to Firestore successfully:', Object.keys(updates));
+      } catch (e: any) {
+          console.error("❌ Error saving to Firestore:", e);
+          
+          // 如果 Firestore 保存失败，尝试保存到 localStorage 作为备份
+          if ((state.user as any).isAnonymous) {
+              const guestUid = state.user.uid;
+              const dataToSave = {
+                  profile: newState.profile,
+                  goals: newState.goals,
+                  logs: newState.logs,
+                  bodyLogs: newState.bodyLogs,
+                  workoutLogs: newState.workoutLogs,
+                  hasCompletedOnboarding: newState.hasCompletedOnboarding,
+                  trainingMode: newState.trainingMode
+              };
+              try {
+                  localStorage.setItem(`guest_data_${guestUid}`, JSON.stringify(dataToSave));
+                  console.log('⚠️ Fallback: Data saved to localStorage');
+              } catch (localError) {
+                  console.error("Failed to save to localStorage:", localError);
+              }
+          }
+          
+          if (e.code === 'permission-denied') {
+              console.error("Firestore permission denied - check security rules");
           }
       }
   };
@@ -386,40 +451,74 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const loginAsGuest = async () => {
-      // Development mode: Create a mock user without Firebase authentication
-      // This bypasses Firebase auth requirements for testing
+      // 使用 Firebase 匿名认证，确保数据能保存到 Firestore
+      if (!isFirebaseInitialized) throw new Error("Firebase configuration error");
+      
       try {
-          // Create a mock user object
-          const mockUser = {
-              uid: `guest_${Date.now()}`,
-              email: 'guest@test.local',
-              displayName: '訪客測試用戶',
-              photoURL: null,
-              isAnonymous: true
-          };
-
-          // Set state directly with guest user data
-          setState({
-              user: mockUser as any,
-              authLoading: false,
-              hasCompletedOnboarding: false,
-              profile: { 
-                  ...DEFAULT_PROFILE, 
-                  displayName: '訪客測試用戶',
-                  avatar: undefined
-              }, 
-              goals: DEFAULT_GOALS,
-              trainingMode: 'rest',
-              todayStats: DEFAULT_STATS,
-              logs: [],
-              bodyLogs: [],
-              workoutLogs: [],
-              isFirebaseReady: true
-          });
-
-          // Try to save to Firestore if available (but don't fail if it doesn't work)
+          // 尝试使用 Firebase 匿名认证
+          let result;
           try {
-              const userDocRef = doc(db, "users", mockUser.uid);
+              result = await signInAnonymously(auth);
+          } catch (authError: any) {
+              // 如果匿名认证未启用，使用本地存储方案
+              console.warn("Anonymous auth not available, using localStorage fallback:", authError);
+              
+              // 使用固定的访客UID（从localStorage读取或创建）
+              let guestUid = localStorage.getItem('guest_uid');
+              if (!guestUid) {
+                  guestUid = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                  localStorage.setItem('guest_uid', guestUid);
+              }
+              
+              // 创建模拟用户对象
+              const mockUser = {
+                  uid: guestUid,
+                  email: 'guest@test.local',
+                  displayName: '訪客測試用戶',
+                  photoURL: null,
+                  isAnonymous: true
+              };
+              
+              // 从 localStorage 加载数据
+              const savedData = localStorage.getItem(`guest_data_${guestUid}`);
+              const initialData = savedData ? JSON.parse(savedData) : {
+                  profile: { ...DEFAULT_PROFILE, displayName: '訪客測試用戶' },
+                  goals: DEFAULT_GOALS,
+                  logs: [],
+                  bodyLogs: [],
+                  workoutLogs: [],
+                  hasCompletedOnboarding: false,
+                  trainingMode: 'rest'
+              };
+              
+              setState({
+                  user: mockUser as any,
+                  authLoading: false,
+                  hasCompletedOnboarding: initialData.hasCompletedOnboarding || false,
+                  profile: initialData.profile || { ...DEFAULT_PROFILE, displayName: '訪客測試用戶' },
+                  goals: initialData.goals || DEFAULT_GOALS,
+                  trainingMode: initialData.trainingMode || 'rest',
+                  todayStats: calculateTodayStats(initialData.logs || []),
+                  logs: initialData.logs || [],
+                  bodyLogs: initialData.bodyLogs || [],
+                  workoutLogs: initialData.workoutLogs || [],
+                  isFirebaseReady: true
+              });
+              
+              // 监听状态变化，自动保存到 localStorage
+              return;
+          }
+          
+          // 如果匿名认证成功，使用正常的 Firebase 流程
+          const user = result.user;
+          console.log('Guest signed in with Firebase anonymous auth:', user.uid);
+          
+          // 检查是否已有数据
+          const userDocRef = doc(db, "users", user.uid);
+          const docSnap = await getDoc(userDocRef);
+          
+          if (!docSnap.exists()) {
+              // 创建新访客数据
               await setDoc(userDocRef, {
                   profile: { 
                       ...DEFAULT_PROFILE, 
@@ -432,11 +531,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   workoutLogs: [],
                   hasCompletedOnboarding: false,
                   trainingMode: 'rest'
-              }, { merge: true });
-          } catch (firestoreError) {
-              // If Firestore fails, continue anyway (local-only mode)
-              console.warn("Guest mode: Firestore save failed, using local-only mode", firestoreError);
+              });
           }
+          // 数据会通过 onAuthStateChanged 的 onSnapshot 自动加载
+          
       } catch (error: any) {
           console.error("Guest Sign-In Error:", error);
           throw error;

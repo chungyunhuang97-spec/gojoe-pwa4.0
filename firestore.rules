@@ -3,6 +3,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
+      // 允许已认证用户读写自己的数据
+      // 包括 Google 登录和匿名认证的用户
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }
