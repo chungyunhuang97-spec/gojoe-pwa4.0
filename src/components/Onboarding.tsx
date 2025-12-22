@@ -34,13 +34,17 @@ export const Onboarding: React.FC = () => {
     }
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (step < 4) {
       setStep(step + 1);
     } else {
-      // Finalize Data
+      // Finalize Data - Ensure all profile data is saved
       const { protein, carbs, fat } = calculateMacros(localCalories, profile.goalType);
       
+      // Save profile data explicitly to ensure persistence
+      updateProfile(profile);
+      
+      // Save goals
       updateGoals({ 
         targetCalories: localCalories,
         targetProtein: protein,
@@ -51,6 +55,8 @@ export const Onboarding: React.FC = () => {
             breakdown: budgetBreakdown
         }
       });
+      
+      // Mark onboarding as complete (this also saves to Firestore)
       completeOnboarding();
     }
   };

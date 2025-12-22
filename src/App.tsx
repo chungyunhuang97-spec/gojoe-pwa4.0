@@ -1,15 +1,27 @@
 
-import React, { useState, useEffect } from 'react';
-import { Dashboard } from './components/Dashboard';
-import { Onboarding } from './components/Onboarding';
-import { History } from './components/History';
-import { Profile } from './components/Profile';
-import { Login } from './components/Login';
-import { ApiKeySetup } from './components/ApiKeySetup';
-import { Training } from './components/Training';
-import { Analytics } from './components/Analytics';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { UserProvider, useUser } from './context/UserContext';
 import { Menu, User, X, ChevronRight, Settings, LogOut, History as HistoryIcon, Home, Key, Dumbbell, BarChart3 } from 'lucide-react';
+
+// Lazy load components for better initial load performance
+const Dashboard = lazy(() => import('./components/Dashboard').then(m => ({ default: m.Dashboard })));
+const Onboarding = lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding })));
+const History = lazy(() => import('./components/History').then(m => ({ default: m.History })));
+const Profile = lazy(() => import('./components/Profile').then(m => ({ default: m.Profile })));
+const Login = lazy(() => import('./components/Login').then(m => ({ default: m.Login })));
+const ApiKeySetup = lazy(() => import('./components/ApiKeySetup').then(m => ({ default: m.ApiKeySetup })));
+const Training = lazy(() => import('./components/Training').then(m => ({ default: m.Training })));
+const Analytics = lazy(() => import('./components/Analytics').then(m => ({ default: m.Analytics })));
+
+// Loading fallback component
+const LoadingFallback: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center text-gray-400 font-bold">
+    <div className="flex flex-col items-center gap-3">
+      <div className="w-8 h-8 border-4 border-brand-green border-t-transparent rounded-full animate-spin"></div>
+      <span>載入中...</span>
+    </div>
+  </div>
+);
 
 type ViewType = 'dashboard' | 'history' | 'profile' | 'settings' | 'apikey' | 'training' | 'analytics';
 
@@ -18,7 +30,8 @@ const Sidebar: React.FC<{ isOpen: boolean; onClose: () => void; onViewChange: (v
   const { logout } = useUser();
   const menuItems: { icon: any, label: string, view: ViewType }[] = [
     { icon: Home, label: '首頁', view: 'dashboard' },
-    { icon: Dumbbell, label: '訓練記錄', view: 'training' },
+    // 移除訓練記錄頁面 - Go Joe專注於審視而非記錄，訓練紀錄通過匯入功能在首頁AI教練中處理
+    // { icon: Dumbbell, label: '訓練記錄', view: 'training' },
     { icon: HistoryIcon, label: '歷史紀錄', view: 'history' },
     { icon: BarChart3, label: '數據分析', view: 'analytics' },
     { icon: User, label: '個人檔案', view: 'profile' },
@@ -84,9 +97,15 @@ const MainApp: React.FC = () => {
     checkKey();
   }, []);
 
-  if (authLoading) return <div className="min-h-screen flex items-center justify-center text-gray-400 font-bold">載入中...</div>;
+  if (authLoading) return <LoadingFallback />;
 
-  if (!user) return <Login />;
+  if (!user) {
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <Login />
+      </Suspense>
+    );
+  }
 
   // --- 新用戶流程判定 ---
   // hasCompletedOnboarding 為 false 時，視為需要走「API Key → Onboarding」的新用戶流程。
@@ -94,7 +113,11 @@ const MainApp: React.FC = () => {
 
   // Step 3：API Key 設定（僅新用戶且尚未設定時會出現）
   if (isNewUserFlow && !hasApiKey && currentView !== 'apikey') {
-    return <ApiKeySetup onComplete={() => setHasApiKey(true)} />;
+    return (
+      <Suspense fallback={<LoadingFallback />}>
+        <ApiKeySetup onComplete={() => setHasApiKey(true)} />
+      </Suspense>
+    );
   }
 
   // 手動從側邊選單開啟 API Key 設定
@@ -108,7 +131,9 @@ const MainApp: React.FC = () => {
                 </button>
              </header>
              <div className="flex-1 overflow-y-auto">
-                 <ApiKeySetup onComplete={() => { setHasApiKey(true); setCurrentView('dashboard'); }} />
+                 <Suspense fallback={<LoadingFallback />}>
+                   <ApiKeySetup onComplete={() => { setHasApiKey(true); setCurrentView('dashboard'); }} />
+                 </Suspense>
              </div>
           </div>
        </div>
@@ -120,7 +145,9 @@ const MainApp: React.FC = () => {
     return (
        <div className="min-h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
           <div className="w-full sm:max-w-[420px] bg-white min-h-screen sm:min-h-[850px] sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200">
-             <Onboarding />
+             <Suspense fallback={<LoadingFallback />}>
+               <Onboarding />
+             </Suspense>
           </div>
        </div>
     );
@@ -143,12 +170,15 @@ const MainApp: React.FC = () => {
         </header>
 
         <main className="flex-1 overflow-hidden relative z-0 flex flex-col">
-          {currentView === 'dashboard' && <Dashboard />}
-          {currentView === 'training' && <Training />}
-          {currentView === 'history' && <History />}
-          {currentView === 'analytics' && <Analytics />}
-          {currentView === 'profile' && <Profile />}
-          {currentView === 'settings' && <PlaceholderView title="設定" />}
+          <Suspense fallback={<LoadingFallback />}>
+            {currentView === 'dashboard' && <Dashboard />}
+            {/* 訓練記錄功能已整合到首頁AI教練中，此頁面已移除 */}
+            {currentView === 'training' && <PlaceholderView title="訓練記錄已整合到首頁AI教練" />}
+            {currentView === 'history' && <History />}
+            {currentView === 'analytics' && <Analytics />}
+            {currentView === 'profile' && <Profile />}
+            {currentView === 'settings' && <PlaceholderView title="設定" />}
+          </Suspense>
         </main>
 
         <Sidebar isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} onViewChange={setCurrentView} />

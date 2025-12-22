@@ -4,8 +4,9 @@ import { useUser } from '../context/UserContext';
 import { Loader2 } from 'lucide-react';
 
 export const Login: React.FC = () => {
-  const { loginWithGoogle } = useUser();
+  const { loginWithGoogle, loginAsGuest } = useUser();
   const [isLoading, setIsLoading] = useState(false);
+  const [isGuestLoading, setIsGuestLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleGoogleSignIn = async () => {
@@ -29,6 +30,20 @@ export const Login: React.FC = () => {
       setError(msg);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleGuestSignIn = async () => {
+    setError('');
+    setIsGuestLoading(true);
+
+    try {
+      await loginAsGuest();
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || "訪客登入失敗，請稍後再試");
+    } finally {
+      setIsGuestLoading(false);
     }
   };
 
@@ -60,7 +75,7 @@ export const Login: React.FC = () => {
           {/* Google Sign-In Button */}
           <button 
             onClick={handleGoogleSignIn}
-            disabled={isLoading}
+            disabled={isLoading || isGuestLoading}
             className="w-full bg-white border-2 border-gray-300 text-gray-700 py-4 rounded-2xl font-black text-lg shadow-lg hover:shadow-xl hover:border-gray-400 active:scale-95 transition-all flex items-center justify-center gap-3 mt-4"
           >
              {isLoading ? (
@@ -74,6 +89,24 @@ export const Login: React.FC = () => {
                         <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
                     </svg>
                     <span>使用 Google 帳號登入</span>
+                 </>
+             )}
+          </button>
+
+          {/* Guest Sign-In Button (Developer Mode) */}
+          <button 
+            onClick={handleGuestSignIn}
+            disabled={isLoading || isGuestLoading}
+            className="w-full bg-brand-black text-brand-green py-4 rounded-2xl font-black text-lg shadow-lg hover:shadow-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-3 border-2 border-brand-green"
+          >
+             {isGuestLoading ? (
+                 <Loader2 className="animate-spin" size={20} />
+             ) : (
+                 <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>訪客登入（測試模式）</span>
                  </>
              )}
           </button>

@@ -10,7 +10,8 @@ const {
   signOut, 
   onAuthStateChanged,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  signInAnonymously
 } = _firebaseAuth as any;
 
 const { 
@@ -132,6 +133,7 @@ export interface UserState {
 
 export interface UserContextType extends UserState {
   loginWithGoogle: () => Promise<void>;
+  loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
   updateProfile: (profile: Partial<UserProfile>) => void;
   updateGoals: (goals: Partial<UserGoals>) => void;
@@ -238,13 +240,20 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     let unsubscribeFirestore: (() => void) | null = null;
+    let authStateResolved = false;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser: any) => {
+        // Mark auth as resolved immediately to show UI faster
+        if (!authStateResolved) {
+            authStateResolved = true;
+            setState(prev => ({ ...prev, authLoading: false, user: currentUser || null }));
+        }
+
         if (currentUser) {
             // User Logged In
             const userDocRef = doc(db, "users", currentUser.uid);
             
-            // Set up real-time listener
+            // Set up real-time listener (non-blocking)
             unsubscribeFirestore = onSnapshot(userDocRef, (docSnap: any) => {
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
@@ -286,11 +295,21 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // --- Unified Data Saving ---
   const saveData = async (updates: Partial<UserState>) => {
       if (!state.user) return;
+      
+      // For guest users, update local state immediately
+      if ((state.user as any).isAnonymous) {
+          setState(prev => ({ ...prev, ...updates }));
+      }
+      
+      // Try to save to Firestore (but don't fail if it doesn't work for guest users)
       try {
           const userDocRef = doc(db, "users", state.user.uid);
           await setDoc(userDocRef, updates, { merge: true });
       } catch (e) {
-          console.error("Error saving to Firestore:", e);
+          // For guest users, this is expected - data is stored locally
+          if (!(state.user as any).isAnonymous) {
+              console.error("Error saving to Firestore:", e);
+          }
       }
   };
 
@@ -332,6 +351,64 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // This ensures we NEVER overwrite existing user data
       } catch (error: any) {
           console.error("Google Sign-In Error:", error);
+          throw error;
+      }
+  };
+
+  const loginAsGuest = async () => {
+      // Development mode: Create a mock user without Firebase authentication
+      // This bypasses Firebase auth requirements for testing
+      try {
+          // Create a mock user object
+          const mockUser = {
+              uid: `guest_${Date.now()}`,
+              email: 'guest@test.local',
+              displayName: '訪客測試用戶',
+              photoURL: null,
+              isAnonymous: true
+          };
+
+          // Set state directly with guest user data
+          setState({
+              user: mockUser as any,
+              authLoading: false,
+              hasCompletedOnboarding: false,
+              profile: { 
+                  ...DEFAULT_PROFILE, 
+                  displayName: '訪客測試用戶',
+                  avatar: undefined
+              }, 
+              goals: DEFAULT_GOALS,
+              trainingMode: 'rest',
+              todayStats: DEFAULT_STATS,
+              logs: [],
+              bodyLogs: [],
+              workoutLogs: [],
+              isFirebaseReady: true
+          });
+
+          // Try to save to Firestore if available (but don't fail if it doesn't work)
+          try {
+              const userDocRef = doc(db, "users", mockUser.uid);
+              await setDoc(userDocRef, {
+                  profile: { 
+                      ...DEFAULT_PROFILE, 
+                      displayName: '訪客測試用戶',
+                      avatar: undefined
+                  }, 
+                  goals: DEFAULT_GOALS,
+                  logs: [],
+                  bodyLogs: [],
+                  workoutLogs: [],
+                  hasCompletedOnboarding: false,
+                  trainingMode: 'rest'
+              }, { merge: true });
+          } catch (firestoreError) {
+              // If Firestore fails, continue anyway (local-only mode)
+              console.warn("Guest mode: Firestore save failed, using local-only mode", firestoreError);
+          }
+      } catch (error: any) {
+          console.error("Guest Sign-In Error:", error);
           throw error;
       }
   };
@@ -463,7 +540,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   return (
     <UserContext.Provider value={{ 
       ...state, 
-      loginWithGoogle, logout, 
+      loginWithGoogle, loginAsGuest, logout, 
       updateProfile, updateGoals, 
       addLog, updateLog, deleteLog, 
       addBodyLog, deleteBodyLog,

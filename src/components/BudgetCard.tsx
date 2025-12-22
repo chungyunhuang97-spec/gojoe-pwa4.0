@@ -19,13 +19,13 @@ export const BudgetCard: React.FC<Props> = ({ goals, stats }) => {
   const isOverBudget = stats.spentBudget > goals.budget.daily;
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-lg rounded-[2.5rem] p-6 flex flex-row items-center gap-4 animate-fade-in relative overflow-hidden h-[220px]">
+    <div className="bg-white/70 backdrop-blur-xl border border-white/60 shadow-lg rounded-[2.5rem] p-4 flex flex-row items-center gap-3 animate-fade-in relative overflow-hidden h-[160px]">
       
        {/* Decorative Glow */}
        <div className="absolute -top-10 -right-10 w-40 h-40 bg-brand-black/5 rounded-full blur-3xl pointer-events-none"></div>
 
        {/* Chart */}
-       <div className="relative w-32 h-32 shrink-0 flex items-center justify-center">
+       <div className="relative w-24 h-24 shrink-0 flex items-center justify-center">
          <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
              <circle cx="50" cy="50" r={radius} stroke="#E5E7EB" strokeWidth="10" fill="none" />
              <circle 
