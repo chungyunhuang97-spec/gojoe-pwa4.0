@@ -109,7 +109,20 @@ const MainApp: React.FC = () => {
 
   // --- 新用戶流程判定 ---
   // hasCompletedOnboarding 為 false 時，視為需要走「API Key → Onboarding」的新用戶流程。
-  const isNewUserFlow = !hasCompletedOnboarding;
+  // 重要：如果 profile 已经有数据（height > 0），说明已经完成过 onboarding，应该跳过
+  // 这样可以处理旧数据中 hasCompletedOnboarding 字段缺失的情况
+  const hasProfileData = profile && profile.height > 0 && profile.weight > 0 && profile.age > 0;
+  const isNewUserFlow = !hasCompletedOnboarding && !hasProfileData;
+  
+  console.log('App render check:', {
+    hasUser: !!user,
+    hasCompletedOnboarding,
+    hasProfileData,
+    profileHeight: profile.height,
+    profileWeight: profile.weight,
+    isNewUserFlow,
+    hasApiKey
+  });
 
   // Step 3：API Key 設定（僅新用戶且尚未設定時會出現）
   if (isNewUserFlow && !hasApiKey && currentView !== 'apikey') {
@@ -154,8 +167,8 @@ const MainApp: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
-      <div className="w-full sm:max-w-[420px] bg-white min-h-screen sm:min-h-[850px] sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200/50">
+    <div className="h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
+      <div className="w-full sm:max-w-[420px] bg-white h-screen sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200/50">
         
         <header className="px-5 pt-12 pb-2 flex justify-between items-center bg-white/80 backdrop-blur-md sticky top-0 z-50">
           <button onClick={() => setIsMenuOpen(true)} className="p-2 -ml-2 hover:bg-gray-100 rounded-full transition-transform active:scale-95">

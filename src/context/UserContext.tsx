@@ -268,11 +268,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         logsCount: userData.logs?.length || 0
                     });
                     
+                    // 确保 hasCompletedOnboarding 正确加载
+                    const completedOnboarding = userData.hasCompletedOnboarding === true;
+                    
                     setState(prev => ({
                         ...prev,
                         user: currentUser,
                         authLoading: false,
-                        hasCompletedOnboarding: userData.hasCompletedOnboarding || false,
+                        hasCompletedOnboarding: completedOnboarding, // 明确使用布尔值
                         ...userData,
                         // Merge profile carefully to keep defaults and new fields
                         profile: { ...DEFAULT_PROFILE, ...(userData.profile || {}) },
@@ -282,10 +285,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                         workoutLogs: userData.workoutLogs || [],
                         todayStats: calculateTodayStats(userData.logs || [])
                     }));
+                    
+                    console.log('✅ User data loaded - hasCompletedOnboarding:', completedOnboarding);
                 } else {
                     // Document doesn't exist (yet), waiting for creation by signup/init
                     console.log('User document does not exist yet, will be created on first login');
-                    setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
+                    // 新用户，hasCompletedOnboarding 应该是 false
+                    setState(prev => ({ 
+                        ...prev, 
+                        user: currentUser, 
+                        authLoading: false,
+                        hasCompletedOnboarding: false  // 明确设置为 false，表示需要完成 onboarding
+                    }));
                 }
             }, (error: any) => {
                 console.error("Firestore Listen Error:", error);
