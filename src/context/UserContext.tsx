@@ -243,6 +243,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let authStateResolved = false;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (currentUser: any) => {
+        console.log('Auth state changed:', currentUser?.uid, currentUser?.email);
+        
         // Mark auth as resolved immediately to show UI faster
         if (!authStateResolved) {
             authStateResolved = true;
@@ -250,17 +252,27 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (currentUser) {
-            // User Logged In
+            // User Logged In - Use the same UID across all devices
             const userDocRef = doc(db, "users", currentUser.uid);
+            
+            console.log('Loading user data for UID:', currentUser.uid, 'Email:', currentUser.email);
             
             // Set up real-time listener (non-blocking)
             unsubscribeFirestore = onSnapshot(userDocRef, (docSnap: any) => {
                 if (docSnap.exists()) {
                     const userData = docSnap.data();
+                    console.log('User data loaded from Firestore:', {
+                        hasProfile: !!userData.profile,
+                        hasGoals: !!userData.goals,
+                        hasCompletedOnboarding: userData.hasCompletedOnboarding,
+                        logsCount: userData.logs?.length || 0
+                    });
+                    
                     setState(prev => ({
                         ...prev,
                         user: currentUser,
                         authLoading: false,
+                        hasCompletedOnboarding: userData.hasCompletedOnboarding || false,
                         ...userData,
                         // Merge profile carefully to keep defaults and new fields
                         profile: { ...DEFAULT_PROFILE, ...(userData.profile || {}) },
@@ -272,6 +284,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     }));
                 } else {
                     // Document doesn't exist (yet), waiting for creation by signup/init
+                    console.log('User document does not exist yet, will be created on first login');
                     setState(prev => ({ ...prev, user: currentUser, authLoading: false }));
                 }
             }, (error: any) => {
@@ -320,32 +333,49 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       try {
           const provider = new GoogleAuthProvider();
+          // Ensure we get the same account across devices
+          provider.setCustomParameters({
+              prompt: 'select_account'
+          });
+          
           const result = await signInWithPopup(auth, provider);
           const user = result.user;
           
+          console.log('Google Sign-In successful:', {
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName
+          });
+          
           // CRITICAL DATA SAFETY LOGIC: Check if document exists FIRST
+          // The UID should be the same for the same Google account across all devices
           const userDocRef = doc(db, "users", user.uid);
-      const docSnap = await getDoc(userDocRef);
+          const docSnap = await getDoc(userDocRef);
       
           // IF NOT Exists: Only then create the default profile (initialize data)
-      if (!docSnap.exists()) {
+          if (!docSnap.exists()) {
+              console.log('Creating new user document for:', user.uid);
               // Extract display name from Google account
               const displayName = user.displayName || user.email?.split('@')[0] || 'Joe';
               const avatar = user.photoURL || undefined;
               
-          await setDoc(userDocRef, {
+              await setDoc(userDocRef, {
                   profile: { 
                       ...DEFAULT_PROFILE, 
                       displayName,
                       avatar
                   }, 
-              goals: DEFAULT_GOALS,
-              logs: [],
-              bodyLogs: [],
-              workoutLogs: [],
-              hasCompletedOnboarding: false,
-              trainingMode: 'rest'
-          });
+                  goals: DEFAULT_GOALS,
+                  logs: [],
+                  bodyLogs: [],
+                  workoutLogs: [],
+                  hasCompletedOnboarding: false,
+                  trainingMode: 'rest'
+              });
+              
+              console.log('User document created successfully');
+          } else {
+              console.log('User document already exists, loading existing data');
           }
           // IF Exists: Do nothing - data will be loaded by the onSnapshot listener
           // This ensures we NEVER overwrite existing user data

@@ -16,6 +16,23 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3000
     },
+    build: {
+      // 优化构建输出
+      outDir: 'dist',
+      assetsDir: 'assets',
+      sourcemap: false, // 生产环境不生成 sourcemap，加快构建
+      minify: 'esbuild', // 使用 esbuild 压缩（更快，默认）
+      rollupOptions: {
+        output: {
+          // 代码分割优化
+          manualChunks: {
+            'vendor-react': ['react', 'react-dom'],
+            'vendor-firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore'],
+            'vendor-ai': ['@google/genai']
+          }
+        }
+      }
+    },
     // Alias configuration removed to enforce standard relative paths
     define: {
       // Force replace import.meta.env vars

@@ -21,22 +21,48 @@ export const Analytics: React.FC = () => {
       return count;
   }, [workoutLogs]);
 
-  // 2. Monthly Duration (Group by Week)
+  // 2. Monthly Duration (Group by Week) - 按实际日期分组
   const monthlyDurationData = useMemo(() => {
-      // Mock weeks for simplicity or calculate dynamic
-      const data = [
-          { name: 'W1', minutes: 0 }, { name: 'W2', minutes: 0 },
-          { name: 'W3', minutes: 0 }, { name: 'W4', minutes: 0 }
-      ];
-      // Simple distribution logic (just mapping all logs to buckets)
-      workoutLogs.forEach((log, i) => {
-          const idx = i % 4; // Mock logic
-          data[idx].minutes += log.duration;
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weeks: { name: string; minutes: number; startDate: Date }[] = [];
+      
+      // 计算本月有多少周
+      let currentWeekStart = new Date(firstDayOfMonth);
+      while (currentWeekStart <= now) {
+          const weekEnd = new Date(currentWeekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          if (weekEnd > now) weekEnd = now;
+          
+          const weekNum = weeks.length + 1;
+          weeks.push({
+              name: `W${weekNum}`,
+              minutes: 0,
+              startDate: new Date(currentWeekStart)
+          });
+          
+          currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      }
+      
+      // 分配训练记录到对应的周
+      workoutLogs.forEach(log => {
+          const logDate = new Date(log.date);
+          if (logDate >= firstDayOfMonth && logDate <= now) {
+              const weekIndex = weeks.findIndex(w => {
+                  const weekEnd = new Date(w.startDate);
+                  weekEnd.setDate(weekEnd.getDate() + 6);
+                  return logDate >= w.startDate && logDate <= weekEnd;
+              });
+              if (weekIndex >= 0) {
+                  weeks[weekIndex].minutes += log.duration || 0;
+              }
+          }
       });
-      return data;
+      
+      return weeks.map(w => ({ name: w.name, minutes: w.minutes }));
   }, [workoutLogs]);
 
-  // 3. Muscle Distribution
+  // 3. Muscle Distribution - 翻译部位名称
   const muscleData = useMemo(() => {
       const counts: Record<string, number> = {};
       workoutLogs.forEach(log => {
@@ -44,7 +70,39 @@ export const Analytics: React.FC = () => {
               counts[part] = (counts[part] || 0) + 1;
           });
       });
-      return Object.keys(counts).map(key => ({ name: key, value: counts[key] }));
+      
+      // 部位名称翻译
+      const partTranslations: Record<string, string> = {
+          'shoulders': '肩膀',
+          'triceps': '三頭',
+          'biceps': '二頭',
+          'chest': '胸',
+          'back': '背',
+          'legs': '腿',
+          'quadriceps': '股四',
+          'hamstrings': '胭繩',
+          'calves': '小腿',
+          'abs': '腹部',
+          'traps': '斜方',
+          'forearms': '小臂',
+          'full_body': '全身'
+      };
+      
+      return Object.keys(counts).map(key => ({ 
+          name: partTranslations[key] || key, 
+          value: counts[key] 
+      }));
+  }, [workoutLogs]);
+  
+  // 4. 总训练统计（从训记导入的数据）
+  const totalStats = useMemo(() => {
+      const totalWeight = workoutLogs.reduce((sum, log) => {
+          return sum + log.exercises.reduce((exSum, ex) => exSum + (ex.weight * ex.reps * ex.sets), 0);
+      }, 0);
+      const totalDuration = workoutLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+      const totalExercises = workoutLogs.reduce((sum, log) => sum + log.exercises.length, 0);
+      
+      return { totalWeight, totalDuration, totalExercises, totalWorkouts: workoutLogs.length };
   }, [workoutLogs]);
 
   return (
@@ -99,6 +157,37 @@ export const Analytics: React.FC = () => {
                      <p className="text-xs text-gray-400 font-bold">尚無數據</p>
                  )}
             </div>
+        </div>
+
+        {/* Total Stats Card - 显示从训记导入的总体数据 */}
+        <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-brand-green text-brand-black rounded-full"><TrendingUp size={20} /></div>
+                <h3 className="font-bold text-gray-800">累計訓練統計</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs text-gray-400 font-bold mb-1">總訓練次數</p>
+                    <p className="text-2xl font-black text-brand-black">{totalStats.totalWorkouts}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs text-gray-400 font-bold mb-1">總動作數</p>
+                    <p className="text-2xl font-black text-brand-black">{totalStats.totalExercises}</p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs text-gray-400 font-bold mb-1">總重量</p>
+                    <p className="text-2xl font-black text-brand-black">{Math.round(totalStats.totalWeight)}<span className="text-sm text-gray-400">kg</span></p>
+                </div>
+                <div className="bg-gray-50 rounded-xl p-4">
+                    <p className="text-xs text-gray-400 font-bold mb-1">總時長</p>
+                    <p className="text-2xl font-black text-brand-black">{totalStats.totalDuration}<span className="text-sm text-gray-400">分</span></p>
+                </div>
+            </div>
+            {workoutLogs.length > 0 && (
+                <p className="text-xs text-gray-400 font-bold mt-4 text-center">
+                    * 包含從訓記App匯入的訓練紀錄
+                </p>
+            )}
         </div>
     </div>
   );

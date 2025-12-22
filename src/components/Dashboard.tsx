@@ -643,7 +643,7 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col relative bg-gray-50 overflow-y-auto">
+    <div className="h-full flex flex-col relative bg-gray-50 overflow-hidden">
       
       {/* 1. CAROUSEL - Nutrition & Budget */}
       <div className="px-4 pt-4 pb-2 shrink-0">
@@ -729,8 +729,8 @@ export const Dashboard: React.FC = () => {
       </div>
 
       {/* 3. CHAT - AI教練 */}
-      <div className="px-4 mb-5 flex-1 flex flex-col min-h-0" style={{ minHeight: '100vh' }}>
-          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col h-full">
+      <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>

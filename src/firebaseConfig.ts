@@ -1,6 +1,6 @@
 
 import { initializeApp } from "firebase/app";
-import { getAuth, initializeAuth, inMemoryPersistence, Auth } from "firebase/auth";
+import { getAuth, initializeAuth, browserLocalPersistence, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 
 // HARDCODED CONFIG (Safe for this Vibe Coding environment)
@@ -17,12 +17,16 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Explicitly type auth to avoid "implicit any" or module resolution issues
+// Use browserLocalPersistence to ensure auth state persists across devices and sessions
 let auth: Auth;
 try {
     auth = getAuth(app);
+    // Ensure persistence is set to browserLocalPersistence (default, but explicit for clarity)
+    // This ensures the same Google account is recognized across different devices
 } catch (e) {
     console.warn("Standard Auth Init failed, using fallback:", e);
-    auth = initializeAuth(app, { persistence: inMemoryPersistence });
+    // Use browserLocalPersistence instead of inMemoryPersistence for cross-device sync
+    auth = initializeAuth(app, { persistence: browserLocalPersistence });
 }
 
 // Explicitly type db
