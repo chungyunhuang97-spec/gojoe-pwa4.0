@@ -28,16 +28,48 @@ type ViewType = 'dashboard' | 'history' | 'profile' | 'settings' | 'apikey' | 't
 // --- TabBar ---
 const TabBar: React.FC<{ currentView: ViewType; onViewChange: (view: ViewType) => void }> = ({ currentView, onViewChange }) => {
   const tabs = [
-    { icon: HistoryIcon, label: '歷史紀錄', view: 'history' as ViewType },
-    { icon: Home, label: 'Go', view: 'dashboard' as ViewType },
-    { icon: User, label: '個人檔案', view: 'profile' as ViewType },
+    { icon: HistoryIcon, label: '歷史紀錄', view: 'history' as ViewType, useImage: false },
+    { icon: Home, label: 'Go', view: 'dashboard' as ViewType, useImage: true, imagePath: '/go-tab-icon.png', isMain: true },
+    { icon: User, label: '個人檔案', view: 'profile' as ViewType, useImage: false },
   ];
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-200 sm:left-auto sm:right-auto sm:max-w-[420px] sm:mx-auto">
-      <div className="flex items-center justify-around h-16 px-2">
-        {tabs.map((tab) => {
+    <div className="fixed bottom-0 left-0 right-0 z-50 bg-brand-black border-t border-gray-200 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:w-full sm:max-w-[420px] sm:rounded-t-3xl shadow-lg">
+      <div className="flex items-center justify-around h-20 px-2 pb-4 sm:pb-2 relative">
+        {tabs.map((tab, index) => {
           const isActive = currentView === tab.view;
+          const isMainTab = tab.isMain;
+          
+          // 主要 tab (Go) - 圆形浮动按钮
+          if (isMainTab) {
+            return (
+              <div key={tab.view} className="flex-1 flex justify-center items-center">
+                <button
+                  onClick={() => onViewChange(tab.view)}
+                  className={`relative w-16 h-16 rounded-full flex items-center justify-center transition-all transform active:scale-95 ${
+                    isActive 
+                      ? 'bg-brand-green shadow-lg shadow-brand-green/50 scale-110' 
+                      : 'bg-brand-green shadow-md'
+                  }`}
+                  style={{
+                    marginTop: '-24px', // 向上浮动
+                  }}
+                >
+                  {tab.useImage && tab.imagePath ? (
+                    <img 
+                      src={tab.imagePath} 
+                      alt={tab.label}
+                      className="w-8 h-8 object-contain brightness-0"
+                    />
+                  ) : (
+                    <tab.icon size={28} strokeWidth={2.5} className="text-brand-black" />
+                  )}
+                </button>
+              </div>
+            );
+          }
+          
+          // 普通 tab
           return (
             <button
               key={tab.view}
@@ -46,10 +78,20 @@ const TabBar: React.FC<{ currentView: ViewType; onViewChange: (view: ViewType) =
                 isActive ? 'text-brand-green' : 'text-gray-400'
               }`}
             >
-              <div className={`p-2 rounded-full transition-all ${isActive ? 'bg-brand-green/10' : ''}`}>
-                <tab.icon size={22} strokeWidth={isActive ? 2.5 : 2} />
+              <div className="p-2">
+                {tab.useImage && tab.imagePath ? (
+                  <img 
+                    src={tab.imagePath} 
+                    alt={tab.label}
+                    className={`w-6 h-6 object-contain transition-all ${
+                      isActive ? 'opacity-100' : 'opacity-40 grayscale'
+                    }`}
+                  />
+                ) : (
+                  <tab.icon size={24} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-brand-green' : 'text-gray-400'} />
+                )}
               </div>
-              <span className={`text-[10px] font-bold mt-0.5 ${isActive ? 'text-brand-green' : 'text-gray-400'}`}>
+              <span className={`text-[11px] font-bold mt-1 ${isActive ? 'text-brand-green' : 'text-gray-400'}`}>
                 {tab.label}
               </span>
             </button>
@@ -168,7 +210,7 @@ const MainApp: React.FC = () => {
           </h1>
         </header>
 
-        <main className="flex-1 overflow-y-auto relative z-0 flex flex-col min-h-0 pb-16">
+        <main className="flex-1 overflow-y-auto relative z-0 flex flex-col min-h-0 pb-20 sm:pb-20">
           <Suspense fallback={<LoadingFallback />}>
             {currentView === 'dashboard' && <Dashboard />}
             {/* 訓練記錄功能已整合到首頁AI教練中，此頁面已移除 */}

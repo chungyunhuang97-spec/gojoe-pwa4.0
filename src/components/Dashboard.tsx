@@ -50,8 +50,8 @@ const getMimeType = (base64String: string) => {
 const TrainingCheckModal: React.FC<{ isOpen: boolean, onClose: (mode: TrainingMode) => void }> = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
-            <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl transform scale-100">
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" style={{ pointerEvents: 'auto' }}>
+            <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl transform scale-100" style={{ pointerEvents: 'auto' }}>
                 <h2 className="text-2xl font-black text-center mb-2">早安 Joe! ☀️</h2>
                 <p className="text-gray-500 font-bold text-center text-sm mb-6">今天的訓練計畫是什麼？</p>
                 <div className="space-y-3">
@@ -62,8 +62,13 @@ const TrainingCheckModal: React.FC<{ isOpen: boolean, onClose: (mode: TrainingMo
                     ].map((mode) => (
                         <button 
                             key={mode.id}
-                            onClick={() => onClose(mode.id as TrainingMode)}
-                            className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-95 transition-transform ${mode.color} font-bold text-lg`}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onClose(mode.id as TrainingMode);
+                            }}
+                            className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-95 transition-transform ${mode.color} font-bold text-lg cursor-pointer`}
+                            style={{ pointerEvents: 'auto' }}
                         >
                             <div className="bg-white/50 p-2 rounded-full">
                                 <mode.icon size={20} />
@@ -725,7 +730,7 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* 2. CHAT - AI教練 */}
-        <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
+        <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ minHeight: '60vh' }}>
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">

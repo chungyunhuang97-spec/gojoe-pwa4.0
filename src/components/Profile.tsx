@@ -190,19 +190,18 @@ export const Profile: React.FC = () => {
           await updateProfile(editForm);
           console.log('Profile 保存完成');
           
+          // 等待一小段时间确保 Firestore 写入完成
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // 然后重新计算目标（等待保存完成）
           await recalculateTargets(editForm);
           console.log('Goals 重新计算完成');
           
-          // 不需要等待，因为 updateProfile 已经会从 Firestore 读取最新数据并更新状态
+          // 再等待一小段时间确保所有数据都已保存
+          await new Promise(resolve => setTimeout(resolve, 500));
+          
           // 关闭编辑模式
           setIsEditing(false);
-          
-          // 立即同步 editForm 到最新的 profile（updateProfile 已经更新了状态）
-          setTimeout(() => {
-              console.log('同步 editForm，当前 profile:', profile);
-              setEditForm(profile);
-          }, 100);
           
           // 显示成功提示
           const successMsg = document.createElement('div');

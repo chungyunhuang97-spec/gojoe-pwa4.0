@@ -137,10 +137,10 @@ export const History: React.FC = () => {
   const years = Array.from({length: 5}, (_, i) => currentYear - 2 + i);
 
   return (
-    <div className="h-full overflow-y-auto no-scrollbar pb-32 bg-gray-50/50">
+    <div className="h-full overflow-hidden flex flex-col bg-gray-50/50">
       
       {/* --- CALENDAR HEADER --- */}
-      <div className="bg-white pb-6 pt-4 rounded-b-[2.5rem] shadow-sm relative z-20">
+      <div className="bg-white pb-6 pt-4 rounded-b-[2.5rem] shadow-sm relative z-20 shrink-0">
         <div className="flex items-center justify-between px-6 mb-6">
             <button onClick={() => changeMonth(-1)} className="p-2 bg-gray-50 rounded-full hover:bg-gray-100 active:scale-95 transition-transform">
                 <ChevronLeft size={20} className="text-gray-600" />
@@ -211,7 +211,7 @@ export const History: React.FC = () => {
       </div>
 
       {/* --- SELECTED DATE DETAILS --- */}
-      <div className="px-5 py-6 animate-fade-in">
+      <div className="px-5 py-6 animate-fade-in flex-1 overflow-y-auto">
           <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-black italic text-brand-black">
                   {selectedDate.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric' })}

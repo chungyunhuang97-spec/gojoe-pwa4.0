@@ -422,17 +422,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // 使用 updateDoc 而不是 setDoc，更精确地更新字段
           // 只更新提供的字段，避免覆盖其他数据
           const updateData: any = {};
-          if (updates.profile !== undefined) updateData.profile = updates.profile;
-          if (updates.goals !== undefined) updateData.goals = updates.goals;
-          if (updates.logs !== undefined) updateData.logs = updates.logs;
-          if (updates.bodyLogs !== undefined) updateData.bodyLogs = updates.bodyLogs;
-          if (updates.workoutLogs !== undefined) updateData.workoutLogs = updates.workoutLogs;
-          if (updates.hasCompletedOnboarding !== undefined) updateData.hasCompletedOnboarding = updates.hasCompletedOnboarding;
-          if (updates.trainingMode !== undefined) updateData.trainingMode = updates.trainingMode;
+          if (updates.profile !== undefined) updateData.profile = newState.profile;
+          if (updates.goals !== undefined) updateData.goals = newState.goals;
+          if (updates.logs !== undefined) updateData.logs = newState.logs;
+          if (updates.bodyLogs !== undefined) updateData.bodyLogs = newState.bodyLogs;
+          if (updates.workoutLogs !== undefined) updateData.workoutLogs = newState.workoutLogs;
+          if (updates.hasCompletedOnboarding !== undefined) updateData.hasCompletedOnboarding = newState.hasCompletedOnboarding;
+          if (updates.trainingMode !== undefined) updateData.trainingMode = newState.trainingMode;
           
           if (Object.keys(updateData).length > 0) {
               await updateDoc(userDocRef, updateData);
-              console.log('✅ Data saved to Firestore successfully with updateDoc');
+              console.log('✅ Data saved to Firestore successfully with updateDoc:', Object.keys(updateData));
               
               // 保存后，直接从 Firestore 读取最新数据来更新状态（确保数据一致性）
               const docSnap = await getDoc(userDocRef);
