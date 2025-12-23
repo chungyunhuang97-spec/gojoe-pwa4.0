@@ -181,24 +181,17 @@ export const Profile: React.FC = () => {
 
   const handleSaveProfile = async () => {
       if (isSaving) return; // 防止重复保存
-      
+
       setIsSaving(true);
       try {
           console.log('开始保存个人资料:', editForm);
-          
-          // 先更新 profile（等待保存完成）
-          await updateProfile(editForm);
-          console.log('Profile 保存完成');
-          
-          // 等待一小段时间确保 Firestore 写入完成
-          await new Promise(resolve => setTimeout(resolve, 500));
-          
-          // 然后重新计算目标（等待保存完成）
-          await recalculateTargets(editForm);
-          console.log('Goals 重新计算完成');
-          
-          // 再等待一小段时间确保所有数据都已保存
-          await new Promise(resolve => setTimeout(resolve, 500));
+
+          // 并行执行更新和重新计算，减少等待时间
+          await Promise.all([
+              updateProfile(editForm),
+              recalculateTargets(editForm)
+          ]);
+          console.log('Profile 和 Goals 保存完成');
           
           // 关闭编辑模式
           setIsEditing(false);
@@ -333,12 +326,15 @@ export const Profile: React.FC = () => {
                         <option value="male">男</option>
                         <option value="female">女</option>
                     </select>
-                    <input 
-                        type="number"
+                    <select 
                         value={editForm.age}
                         onChange={(e) => setEditForm({...editForm, age: Number(e.target.value)})}
-                        className="w-16 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 text-center outline-none focus:border-brand-green"
-                    />
+                        className="w-20 bg-white border border-gray-200 rounded-lg px-2 py-1 text-xs font-bold text-gray-600 text-center outline-none focus:border-brand-green"
+                    >
+                        {Array.from({ length: 83 }, (_, i) => i + 18).map(age => (
+                            <option key={age} value={age}>{age}</option>
+                        ))}
+                    </select>
                     <span className="text-xs font-bold text-gray-400 py-1">歲</span>
                  </div>
 
@@ -444,12 +440,15 @@ export const Profile: React.FC = () => {
                  <span className="text-xs font-bold uppercase">身高</span>
              </div>
              {isEditing ? (
-                 <input 
-                    type="number"
+                 <select 
                     value={editForm.height}
                     onChange={(e) => setEditForm({...editForm, height: Number(e.target.value)})}
                     className="text-3xl font-black text-gray-800 border-b-2 border-gray-100 w-full focus:border-brand-green outline-none bg-transparent"
-                 />
+                 >
+                     {Array.from({ length: 101 }, (_, i) => i + 100).map(height => (
+                         <option key={height} value={height}>{height}</option>
+                     ))}
+                 </select>
              ) : (
                  <p className="text-3xl font-black text-gray-800">{profile.height} <span className="text-sm text-gray-400 font-bold">cm</span></p>
              )}
@@ -461,12 +460,15 @@ export const Profile: React.FC = () => {
                  <span className="text-xs font-bold uppercase">體重</span>
              </div>
              {isEditing ? (
-                 <input 
-                    type="number"
+                 <select 
                     value={editForm.weight}
                     onChange={(e) => setEditForm({...editForm, weight: Number(e.target.value)})}
                     className="text-3xl font-black text-gray-800 border-b-2 border-gray-100 w-full focus:border-brand-green outline-none bg-transparent"
-                 />
+                 >
+                     {Array.from({ length: 241 }, (_, i) => 30 + i * 0.5).map(weight => (
+                         <option key={weight} value={weight}>{weight.toFixed(1)}</option>
+                     ))}
+                 </select>
              ) : (
                  <p className="text-3xl font-black text-gray-800">{profile.weight} <span className="text-sm text-gray-400 font-bold">kg</span></p>
              )}

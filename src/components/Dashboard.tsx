@@ -57,7 +57,7 @@ const TrainingCheckModal: React.FC<{ isOpen: boolean, onClose: (mode: TrainingMo
     // #endregion
     if (!isOpen) return null;
     return (
-        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" style={{ pointerEvents: 'auto' }}>
+        <div className="fixed inset-0 z-[60] bg-black/30 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" style={{ pointerEvents: 'auto' }}>
             <div className="bg-white rounded-[2rem] p-6 w-full max-w-sm shadow-2xl transform scale-100" style={{ pointerEvents: 'auto' }}>
                 <h2 className="text-2xl font-black text-center mb-2">早安 Joe! ☀️</h2>
                 <p className="text-gray-500 font-bold text-center text-sm mb-6">今天的訓練計畫是什麼？</p>
@@ -134,33 +134,30 @@ export const Dashboard: React.FC = () => {
 
   const handleTrainingSet = async (mode: TrainingMode) => {
       // #region agent log
-      fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:119',message:'handleTrainingSet called',data:{mode,showTrainingModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:135',message:'handleTrainingSet called',data:{mode,showTrainingModal},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
+      // 立即关闭模态框，提供即时反馈
+      setShowTrainingModal(false);
+      localStorage.setItem('lastTrainingCheckDate', new Date().toDateString());
       try {
           // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:121',message:'Before setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:140',message:'Before setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
           // #endregion
           await setTrainingMode(mode);
           // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:123',message:'After setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
-          // #endregion
-          localStorage.setItem('lastTrainingCheckDate', new Date().toDateString());
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:124',message:'Before setShowTrainingModal(false)',data:{showTrainingModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-          // #endregion
-          setShowTrainingModal(false);
-          // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:125',message:'After setShowTrainingModal(false)',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:142',message:'After setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
           // #endregion
           addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
           // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:126',message:'handleTrainingSet completed successfully',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:144',message:'handleTrainingSet completed successfully',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
           // #endregion
       } catch (error) {
           // #region agent log
-          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:127',message:'handleTrainingSet error',data:{mode,error:error instanceof Error ? error.message : String(error),errorStack:error instanceof Error ? error.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:145',message:'handleTrainingSet error',data:{mode,error:error instanceof Error ? error.message : String(error),errorStack:error instanceof Error ? error.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
           // #endregion
           console.error('设置训练模式失败:', error);
+          // 如果出错，重新打开模态框
+          setShowTrainingModal(true);
       }
   };
 
@@ -767,19 +764,19 @@ export const Dashboard: React.FC = () => {
         </div>
 
         {/* 2. CHAT - AI教練 */}
-        <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ minHeight: '60vh' }}>
-          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
-              <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                      <span className="text-xs font-black text-gray-500 tracking-wider">線上（使用者 API Key）</span>
+        <div className="px-2 sm:px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ minHeight: '60vh' }}>
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+              <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0"></div>
+                      <span className="text-[10px] sm:text-xs font-black text-gray-500 tracking-wider truncate">線上（使用者 API Key）</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {/* Coach Mode Tabs */}
-                      <div className="flex bg-white p-1 rounded-full border border-gray-200">
+                      <div className="flex bg-white p-0.5 sm:p-1 rounded-full border border-gray-200">
                           <button 
                               onClick={() => setCoachMode('diet')}
-                              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                              className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
                                   coachMode === 'diet' 
                                       ? 'bg-brand-green text-brand-black' 
                                       : 'text-gray-400 hover:text-gray-600'
@@ -789,7 +786,7 @@ export const Dashboard: React.FC = () => {
                           </button>
                           <button 
                               onClick={() => setCoachMode('training')}
-                              className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${
+                              className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
                                   coachMode === 'training' 
                                       ? 'bg-brand-green text-brand-black' 
                                       : 'text-gray-400 hover:text-gray-600'
@@ -799,24 +796,25 @@ export const Dashboard: React.FC = () => {
                           </button>
                       </div>
                       {coachMode === 'diet' && (
-                          <button onClick={() => setShowTrainingModal(true)} className="flex items-center gap-1 text-[10px] text-brand-black font-bold bg-white px-3 py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all">
-                              {trainingMode === 'leg' ? '腿日模式' : trainingMode === 'push_pull' ? '推拉模式' : '休息日'}
-                              <ChevronDown size={12} strokeWidth={3} />
+                          <button onClick={() => setShowTrainingModal(true)} className="flex items-center gap-1 text-[9px] sm:text-[10px] text-brand-black font-bold bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all whitespace-nowrap">
+                              <span className="hidden sm:inline">{trainingMode === 'leg' ? '腿日模式' : trainingMode === 'push_pull' ? '推拉模式' : '休息日'}</span>
+                              <span className="sm:hidden">{trainingMode === 'leg' ? '腿日' : trainingMode === 'push_pull' ? '推拉' : '休息'}</span>
+                              <ChevronDown size={10} strokeWidth={3} className="sm:w-3 sm:h-3" />
                           </button>
                       )}
                       {coachMode === 'training' && (
-                          <button onClick={handleImportWorkout} className="flex items-center gap-1 text-[10px] text-brand-black font-bold bg-white px-3 py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all">
-                              <Upload size={12} />
-                              匯入
+                          <button onClick={handleImportWorkout} className="flex items-center gap-1 text-[9px] sm:text-[10px] text-brand-black font-bold bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all">
+                              <Upload size={10} className="sm:w-3 sm:h-3" />
+                              <span className="hidden sm:inline">匯入</span>
                           </button>
                       )}
                   </div>
               </div>
-              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 bg-white scroll-smooth">
+              <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-2 sm:p-4 space-y-3 sm:space-y-4 bg-white scroll-smooth">
                   {messages.map((msg) => (
                       <div key={msg.id} className={`flex flex-col ${msg.sender === 'user' ? 'items-end' : 'items-start'} animate-fade-in-up`}>
                           {msg.type === 'text' && (
-                              <div className={`max-w-[85%] px-4 py-3 rounded-2xl text-sm font-medium leading-relaxed ${msg.sender === 'user' ? 'bg-brand-black text-brand-green rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none'}`}>
+                              <div className={`max-w-[85%] sm:max-w-[85%] px-3 sm:px-4 py-2 sm:py-3 rounded-2xl text-xs sm:text-sm font-medium leading-relaxed ${msg.sender === 'user' ? 'bg-brand-black text-brand-green rounded-tr-none' : 'bg-gray-100 text-gray-800 rounded-tl-none'}`}>
                                   <MarkdownText text={msg.content || ""} />
                               </div>
                           )}
@@ -849,7 +847,7 @@ export const Dashboard: React.FC = () => {
                   ))}
                   {isTyping && <div className="text-xs text-gray-400 font-bold ml-4 animate-pulse">Coach Joe 正在輸入...</div>}
               </div>
-              <div className="p-3 bg-gray-50 border-t border-gray-100 flex items-center gap-2">
+              <div className="p-2 sm:p-3 bg-gray-50 border-t border-gray-100 flex items-center gap-2">
                   <button
                     onClick={() => {
                         // 根据教练模式自动设置相机类型
@@ -860,13 +858,25 @@ export const Dashboard: React.FC = () => {
                         }
                         setIsCameraOpen(true);
                     }}
-                    className="p-2 bg-white rounded-full text-gray-400 hover:text-brand-black border border-gray-200"
+                    className="p-1.5 sm:p-2 bg-white rounded-full text-gray-400 hover:text-brand-black border border-gray-200 shrink-0"
                     title={coachMode === 'diet' ? '拍食物' : '拍動作'}
                   >
-                    <Camera size={18} />
+                    <Camera size={16} className="sm:w-[18px] sm:h-[18px]" />
                   </button>
-                  <input value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} placeholder="輸入..." className="flex-1 bg-white border border-gray-200 rounded-full px-4 py-2 text-sm font-bold focus:outline-none focus:border-brand-green" />
-                  <button onClick={handleSendMessage} disabled={!inputText.trim()} className="p-2 bg-brand-black text-brand-green rounded-full disabled:opacity-50"><ArrowUp size={18} strokeWidth={3} /></button>
+                  <input 
+                    value={inputText} 
+                    onChange={(e) => setInputText(e.target.value)} 
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()} 
+                    placeholder="輸入..." 
+                    className="flex-1 min-w-0 bg-white border border-gray-200 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-bold focus:outline-none focus:border-brand-green" 
+                  />
+                  <button 
+                    onClick={handleSendMessage} 
+                    disabled={!inputText.trim()} 
+                    className="p-1.5 sm:p-2 bg-brand-black text-brand-green rounded-full disabled:opacity-50 shrink-0"
+                  >
+                    <ArrowUp size={16} strokeWidth={3} className="sm:w-[18px] sm:h-[18px]" />
+                  </button>
               </div>
           </div>
         </div>
