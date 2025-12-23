@@ -30,9 +30,9 @@ export const Analytics: React.FC = () => {
       // 计算本月有多少周
       let currentWeekStart = new Date(firstDayOfMonth);
       while (currentWeekStart <= now) {
-          const weekEnd = new Date(currentWeekStart);
+          let weekEnd = new Date(currentWeekStart);
           weekEnd.setDate(weekEnd.getDate() + 6);
-          if (weekEnd > now) weekEnd = now;
+          if (weekEnd > now) weekEnd = new Date(now);
           
           const weekNum = weeks.length + 1;
           weeks.push({
@@ -104,6 +104,20 @@ export const Analytics: React.FC = () => {
       
       return { totalWeight, totalDuration, totalExercises, totalWorkouts: workoutLogs.length };
   }, [workoutLogs]);
+
+  // 如果没有数据，显示空状态
+  if (workoutLogs.length === 0) {
+    return (
+      <div className="h-full overflow-y-auto no-scrollbar pb-32 bg-gray-50 p-6 space-y-6">
+        <h2 className="text-2xl font-black text-brand-black italic mb-6">數據分析</h2>
+        <div className="bg-white rounded-[2rem] p-12 text-center border border-gray-100 shadow-sm">
+          <Dumbbell size={48} className="mx-auto mb-4 text-gray-300" />
+          <p className="text-gray-400 font-bold mb-2">尚無訓練紀錄</p>
+          <p className="text-xs text-gray-300">請先從首頁 AI 教練匯入訓記 App 的訓練紀錄</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full overflow-y-auto no-scrollbar pb-32 bg-gray-50 p-6 space-y-6">

@@ -17,6 +17,7 @@ const {
 const { 
   doc, 
   setDoc, 
+  updateDoc,
   onSnapshot,
   getDoc 
 } = _firebaseFirestore as any;
@@ -135,9 +136,9 @@ export interface UserContextType extends UserState {
   loginWithGoogle: () => Promise<void>;
   loginAsGuest: () => Promise<void>;
   logout: () => Promise<void>;
-  updateProfile: (profile: Partial<UserProfile>) => void;
-  updateGoals: (goals: Partial<UserGoals>) => void;
-  setTrainingMode: (mode: TrainingMode) => void;
+  updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  updateGoals: (goals: Partial<UserGoals>) => Promise<void>;
+  setTrainingMode: (mode: TrainingMode) => Promise<void>;
   addLog: (log: Omit<LogEntry, 'id' | 'timestamp'>) => void;
   updateLog: (updatedLog: LogEntry) => void;
   deleteLog: (id: string) => void;
@@ -149,7 +150,7 @@ export interface UserContextType extends UserState {
   getWorkoutLogByDate: (date: string) => WorkoutLog | undefined;
   completeOnboarding: () => void;
   resetData: () => void;
-  recalculateTargets: (newProfile: UserProfile, mode?: TrainingMode) => void;
+  recalculateTargets: (newProfile: UserProfile, mode?: TrainingMode) => Promise<void>;
 }
 
 // --- Defaults ---
@@ -271,19 +272,19 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     // 确保 hasCompletedOnboarding 正确加载
                     const completedOnboarding = userData.hasCompletedOnboarding === true;
                     
+                    // 合并数据：使用 Firestore 中的数据（这是最新的真实数据）
                     setState(prev => ({
                         ...prev,
                         user: currentUser,
                         authLoading: false,
-                        hasCompletedOnboarding: completedOnboarding, // 明确使用布尔值
-                        ...userData,
-                        // Merge profile carefully to keep defaults and new fields
-                        profile: { ...DEFAULT_PROFILE, ...(userData.profile || {}) },
-                        goals: userData.goals || DEFAULT_GOALS,
-                        logs: userData.logs || [],
-                        bodyLogs: userData.bodyLogs || [],
-                        workoutLogs: userData.workoutLogs || [],
-                        todayStats: calculateTodayStats(userData.logs || [])
+                        hasCompletedOnboarding: completedOnboarding,
+                        // 使用 Firestore 中的数据，确保 profile 字段完整
+                        profile: userData.profile ? { ...DEFAULT_PROFILE, ...userData.profile } : prev.profile,
+                        goals: userData.goals || prev.goals || DEFAULT_GOALS,
+                        logs: userData.logs || prev.logs || [],
+                        bodyLogs: userData.bodyLogs || prev.bodyLogs || [],
+                        workoutLogs: userData.workoutLogs || prev.workoutLogs || [],
+                        todayStats: calculateTodayStats(userData.logs || prev.logs || [])
                     }));
                     
                     console.log('✅ User data loaded - hasCompletedOnboarding:', completedOnboarding);
@@ -326,6 +327,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       // 先更新本地状态（立即反馈）
       const newState = { ...state, ...updates };
+      // 确保 profile 字段完整合并（如果 updates 中有 profile）
+      if (updates.profile) {
+          newState.profile = { ...state.profile, ...updates.profile };
+      }
       setState(newState);
       
       // 检查是否是使用 localStorage 的访客用户（fallback 方案）
@@ -359,20 +364,102 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDocRef = doc(db, "users", state.user.uid);
           
           // 合并当前状态和更新，确保数据完整
-          const dataToSave = {
-              ...updates,
-              // 确保关键字段存在
-              profile: updates.profile || newState.profile,
-              goals: updates.goals || newState.goals,
-              logs: updates.logs !== undefined ? updates.logs : newState.logs,
-              bodyLogs: updates.bodyLogs !== undefined ? updates.bodyLogs : newState.bodyLogs,
-              workoutLogs: updates.workoutLogs !== undefined ? updates.workoutLogs : newState.workoutLogs,
-              hasCompletedOnboarding: updates.hasCompletedOnboarding !== undefined ? updates.hasCompletedOnboarding : newState.hasCompletedOnboarding,
-              trainingMode: updates.trainingMode || newState.trainingMode
-          };
+          // 重要：如果 updates 中有 profile，使用 updates.profile；否则保留现有的 profile
+          const dataToSave: any = {};
           
-          await setDoc(userDocRef, dataToSave, { merge: true });
-          console.log('✅ Data saved to Firestore successfully:', Object.keys(updates));
+          // 明确处理每个字段，优先使用 updates 中的值
+          if (updates.profile !== undefined) {
+              dataToSave.profile = updates.profile;
+          } else {
+              dataToSave.profile = newState.profile;
+          }
+          
+          if (updates.goals !== undefined) {
+              dataToSave.goals = updates.goals;
+          } else {
+              dataToSave.goals = newState.goals;
+          }
+          
+          if (updates.logs !== undefined) {
+              dataToSave.logs = updates.logs;
+          } else {
+              dataToSave.logs = newState.logs;
+          }
+          
+          if (updates.bodyLogs !== undefined) {
+              dataToSave.bodyLogs = updates.bodyLogs;
+          } else {
+              dataToSave.bodyLogs = newState.bodyLogs;
+          }
+          
+          if (updates.workoutLogs !== undefined) {
+              dataToSave.workoutLogs = updates.workoutLogs;
+          } else {
+              dataToSave.workoutLogs = newState.workoutLogs;
+          }
+          
+          if (updates.hasCompletedOnboarding !== undefined) {
+              dataToSave.hasCompletedOnboarding = updates.hasCompletedOnboarding;
+          } else {
+              dataToSave.hasCompletedOnboarding = newState.hasCompletedOnboarding;
+          }
+          
+          if (updates.trainingMode !== undefined) {
+              dataToSave.trainingMode = updates.trainingMode;
+          } else {
+              dataToSave.trainingMode = newState.trainingMode;
+          }
+          
+          console.log('Saving to Firestore:', { 
+              profile: dataToSave.profile, 
+              profileKeys: Object.keys(dataToSave.profile || {}),
+              profileDisplayName: dataToSave.profile?.displayName,
+              profileHeight: dataToSave.profile?.height,
+              profileWeight: dataToSave.profile?.weight,
+              updatesKeys: Object.keys(updates)
+          });
+          
+          // 使用 updateDoc 而不是 setDoc，更精确地更新字段
+          // 只更新提供的字段，避免覆盖其他数据
+          const updateData: any = {};
+          if (updates.profile !== undefined) updateData.profile = updates.profile;
+          if (updates.goals !== undefined) updateData.goals = updates.goals;
+          if (updates.logs !== undefined) updateData.logs = updates.logs;
+          if (updates.bodyLogs !== undefined) updateData.bodyLogs = updates.bodyLogs;
+          if (updates.workoutLogs !== undefined) updateData.workoutLogs = updates.workoutLogs;
+          if (updates.hasCompletedOnboarding !== undefined) updateData.hasCompletedOnboarding = updates.hasCompletedOnboarding;
+          if (updates.trainingMode !== undefined) updateData.trainingMode = updates.trainingMode;
+          
+          if (Object.keys(updateData).length > 0) {
+              await updateDoc(userDocRef, updateData);
+              console.log('✅ Data saved to Firestore successfully with updateDoc');
+              
+              // 保存后，直接从 Firestore 读取最新数据来更新状态（确保数据一致性）
+              const docSnap = await getDoc(userDocRef);
+              if (docSnap.exists()) {
+                  const latestData = docSnap.data();
+                  console.log('Reading latest data from Firestore after save:', {
+                      profile: latestData.profile,
+                      profileDisplayName: latestData.profile?.displayName,
+                      profileHeight: latestData.profile?.height,
+                      profileWeight: latestData.profile?.weight
+                  });
+                  
+                  // 更新状态为 Firestore 中的最新数据
+                  setState(prev => ({
+                      ...prev,
+                      profile: latestData.profile ? { ...DEFAULT_PROFILE, ...latestData.profile } : prev.profile,
+                      goals: latestData.goals || prev.goals,
+                      logs: latestData.logs || prev.logs,
+                      bodyLogs: latestData.bodyLogs || prev.bodyLogs,
+                      workoutLogs: latestData.workoutLogs || prev.workoutLogs,
+                      hasCompletedOnboarding: latestData.hasCompletedOnboarding !== undefined ? latestData.hasCompletedOnboarding : prev.hasCompletedOnboarding,
+                      trainingMode: latestData.trainingMode || prev.trainingMode
+                  }));
+              }
+          } else {
+              console.warn('No data to save, updateData is empty');
+          }
       } catch (e: any) {
           console.error("❌ Error saving to Firestore:", e);
           
@@ -558,14 +645,29 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // --- Data Actions ---
 
-  const updateProfile = (updates: Partial<UserProfile>) => {
+  const updateProfile = async (updates: Partial<UserProfile>) => {
     const newProfile = { ...state.profile, ...updates };
-    saveData({ profile: newProfile });
+    console.log('updateProfile called:', { 
+        updates, 
+        newProfile, 
+        currentProfile: state.profile,
+        displayName: newProfile.displayName,
+        height: newProfile.height,
+        weight: newProfile.weight
+    });
+    
+    // 先更新本地状态（立即反馈）
+    setState(prev => ({ ...prev, profile: newProfile }));
+    
+    // 然后保存到 Firestore
+    await saveData({ profile: newProfile });
+    
+    console.log('updateProfile completed, profile should be saved');
   };
 
-  const updateGoals = (updates: Partial<UserGoals>) => {
+  const updateGoals = async (updates: Partial<UserGoals>) => {
     const newGoals = { ...state.goals, ...updates };
-    saveData({ goals: newGoals });
+    await saveData({ goals: newGoals });
   };
 
   const addLog = (logData: Omit<LogEntry, 'id' | 'timestamp'>) => {
@@ -644,7 +746,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   };
 
-  const recalculateTargets = (newProfile: UserProfile, mode: TrainingMode = 'rest') => {
+  const recalculateTargets = async (newProfile: UserProfile, mode: TrainingMode = 'rest') => {
       let bmr = (10 * newProfile.weight) + (6.25 * newProfile.height) - (5 * newProfile.age);
       bmr += newProfile.gender === 'male' ? 5 : -161;
       const tdee = Math.round(bmr * newProfile.activityLevel);
@@ -668,12 +770,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           targetFat = Math.max(30, targetFat - 10);
       } 
 
-      updateGoals({ targetCalories, targetProtein, targetFat, targetCarbs });
+      await updateGoals({ targetCalories, targetProtein, targetFat, targetCarbs });
   };
 
-  const setTrainingMode = (mode: TrainingMode) => {
-      saveData({ trainingMode: mode });
-      recalculateTargets(state.profile, mode);
+  const setTrainingMode = async (mode: TrainingMode) => {
+      await saveData({ trainingMode: mode });
+      await recalculateTargets(state.profile, mode);
   };
 
   return (

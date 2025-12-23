@@ -1,11 +1,14 @@
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useUser, UserProfile } from '../context/UserContext';
-import { User, Ruler, Weight, Target, Wallet, LogOut, Settings, Calculator, Save, Camera, Edit2, ChevronRight, X, Key, Trash2, Smile, Flame } from 'lucide-react';
+import { User, Ruler, Weight, Target, Wallet, LogOut, Settings, Calculator, Save, Camera, Edit2, ChevronRight, X, Key, Trash2, Smile, Flame, Dumbbell, TrendingUp, BarChart3 } from 'lucide-react';
 import { aiService } from '../services/ai';
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+
+const COLORS = ['#CCFF00', '#111111', '#9CA3AF', '#60A5FA', '#F472B6'];
 
 export const Profile: React.FC = () => {
-  const { profile, goals, updateGoals, updateProfile, recalculateTargets, logout, resetData } = useUser();
+  const { profile, goals, updateGoals, updateProfile, recalculateTargets, logout, resetData, workoutLogs } = useUser();
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [tempBudget, setTempBudget] = useState(goals.budget.daily);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -13,6 +16,7 @@ export const Profile: React.FC = () => {
   // Edit Mode State
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<UserProfile>(profile);
+  const [isSaving, setIsSaving] = useState(false);
   
   // API Key UI State
   const [newApiKey, setNewApiKey] = useState("");
@@ -24,9 +28,12 @@ export const Profile: React.FC = () => {
       cals: number; protein: number; carbs: number; fat: number;
   }>({ cals: 0, protein: 0, carbs: 0, fat: 0 });
 
-  // Initialize edit form when entering edit mode
+  // Initialize edit form when entering edit mode or when profile changes
   useEffect(() => {
       if (isEditing) {
+          setEditForm(profile);
+      } else {
+          // 当不在编辑模式时，也同步 editForm 以确保数据一致
           setEditForm(profile);
       }
   }, [isEditing, profile]);
@@ -58,6 +65,87 @@ export const Profile: React.FC = () => {
   }, [editForm]);
 
   const bmi = (profile.weight / ((profile.height / 100) ** 2)).toFixed(1);
+
+  // --- Analytics Data (from Analytics component) ---
+  const weeklyFreq = useMemo(() => {
+      const now = new Date();
+      let count = 0;
+      for (let i = 0; i < 7; i++) {
+          const d = new Date();
+          d.setDate(now.getDate() - i);
+          const key = d.toISOString().split('T')[0];
+          if (workoutLogs.some(l => l.date === key)) count++;
+      }
+      return count;
+  }, [workoutLogs]);
+
+  const monthlyDurationData = useMemo(() => {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weeks: { name: string; minutes: number; startDate: Date }[] = [];
+      
+      let currentWeekStart = new Date(firstDayOfMonth);
+      while (currentWeekStart <= now) {
+          let weekEnd = new Date(currentWeekStart);
+          weekEnd.setDate(weekEnd.getDate() + 6);
+          if (weekEnd > now) weekEnd = new Date(now);
+          
+          const weekNum = weeks.length + 1;
+          weeks.push({
+              name: `W${weekNum}`,
+              minutes: 0,
+              startDate: new Date(currentWeekStart)
+          });
+          
+          currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      }
+      
+      workoutLogs.forEach(log => {
+          const logDate = new Date(log.date);
+          if (logDate >= firstDayOfMonth && logDate <= now) {
+              const weekIndex = weeks.findIndex(w => {
+                  const weekEnd = new Date(w.startDate);
+                  weekEnd.setDate(weekEnd.getDate() + 6);
+                  return logDate >= w.startDate && logDate <= weekEnd;
+              });
+              if (weekIndex >= 0) {
+                  weeks[weekIndex].minutes += log.duration || 0;
+              }
+          }
+      });
+      
+      return weeks.map(w => ({ name: w.name, minutes: w.minutes }));
+  }, [workoutLogs]);
+
+  const muscleData = useMemo(() => {
+      const counts: Record<string, number> = {};
+      workoutLogs.forEach(log => {
+          log.bodyParts.forEach(part => {
+              counts[part] = (counts[part] || 0) + 1;
+          });
+      });
+      
+      const partTranslations: Record<string, string> = {
+          'shoulders': '肩膀', 'triceps': '三頭', 'biceps': '二頭', 'chest': '胸', 'back': '背',
+          'legs': '腿', 'quadriceps': '股四', 'hamstrings': '胭繩', 'calves': '小腿', 'abs': '腹部',
+          'traps': '斜方', 'forearms': '小臂', 'full_body': '全身'
+      };
+      
+      return Object.keys(counts).map(key => ({ 
+          name: partTranslations[key] || key, 
+          value: counts[key] 
+      }));
+  }, [workoutLogs]);
+  
+  const totalStats = useMemo(() => {
+      const totalWeight = workoutLogs.reduce((sum, log) => {
+          return sum + log.exercises.reduce((exSum, ex) => exSum + (ex.weight * ex.reps * ex.sets), 0);
+      }, 0);
+      const totalDuration = workoutLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
+      const totalExercises = workoutLogs.reduce((sum, log) => sum + log.exercises.length, 0);
+      
+      return { totalWeight, totalDuration, totalExercises, totalWorkouts: workoutLogs.length };
+  }, [workoutLogs]);
 
   const handleSaveBudget = () => {
     const newTotal = tempBudget;
@@ -91,10 +179,47 @@ export const Profile: React.FC = () => {
     }
   };
 
-  const handleSaveProfile = () => {
-      updateProfile(editForm);
-      recalculateTargets(editForm);
-      setIsEditing(false);
+  const handleSaveProfile = async () => {
+      if (isSaving) return; // 防止重复保存
+      
+      setIsSaving(true);
+      try {
+          console.log('开始保存个人资料:', editForm);
+          
+          // 先更新 profile（等待保存完成）
+          await updateProfile(editForm);
+          console.log('Profile 保存完成');
+          
+          // 然后重新计算目标（等待保存完成）
+          await recalculateTargets(editForm);
+          console.log('Goals 重新计算完成');
+          
+          // 不需要等待，因为 updateProfile 已经会从 Firestore 读取最新数据并更新状态
+          // 关闭编辑模式
+          setIsEditing(false);
+          
+          // 立即同步 editForm 到最新的 profile（updateProfile 已经更新了状态）
+          setTimeout(() => {
+              console.log('同步 editForm，当前 profile:', profile);
+              setEditForm(profile);
+          }, 100);
+          
+          // 显示成功提示
+          const successMsg = document.createElement('div');
+          successMsg.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-brand-green text-brand-black px-4 py-2 rounded-full font-bold text-sm z-50 shadow-lg animate-fade-in';
+          successMsg.textContent = '✅ 已儲存';
+          document.body.appendChild(successMsg);
+          setTimeout(() => {
+              successMsg.style.opacity = '0';
+              successMsg.style.transition = 'opacity 0.3s';
+              setTimeout(() => successMsg.remove(), 300);
+          }, 2000);
+      } catch (error: any) {
+          console.error('保存个人资料失败:', error);
+          alert(`保存失败: ${error.message || '请检查网络连接或重试'}`);
+      } finally {
+          setIsSaving(false);
+      }
   };
 
   const handleSaveApiKey = () => {
@@ -132,8 +257,21 @@ export const Profile: React.FC = () => {
       {/* Top Action Bar */}
       <div className="absolute top-4 right-5 z-10">
           {isEditing ? (
-             <button onClick={handleSaveProfile} className="bg-brand-black text-brand-green px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 shadow-lg active:scale-95 transition-transform hover:scale-105">
-                 <Save size={14} /> 儲存
+             <button 
+                 onClick={handleSaveProfile} 
+                 disabled={isSaving}
+                 className="bg-brand-black text-brand-green px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 shadow-lg active:scale-95 transition-transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+             >
+                 {isSaving ? (
+                     <>
+                         <div className="w-3.5 h-3.5 border-2 border-brand-green border-t-transparent rounded-full animate-spin"></div>
+                         儲存中...
+                     </>
+                 ) : (
+                     <>
+                         <Save size={14} /> 儲存
+                     </>
+                 )}
              </button>
           ) : (
              <button onClick={() => setIsEditing(true)} className="bg-white text-gray-500 border border-gray-200 px-4 py-2 rounded-full font-bold text-xs flex items-center gap-2 shadow-sm active:scale-95 transition-transform hover:text-brand-black hover:border-brand-green/50">
@@ -369,6 +507,106 @@ export const Profile: React.FC = () => {
              </div>
              <Settings size={20} className="text-gray-300" />
          </button>
+
+         {/* Data Analytics Section - 移到修改预算下方 */}
+         <div className="space-y-4 pt-2">
+           <div className="flex items-center gap-2 mb-2">
+             <BarChart3 size={18} className="text-brand-black" />
+             <h3 className="text-lg font-black text-brand-black italic">數據分析</h3>
+           </div>
+
+           {workoutLogs.length === 0 ? (
+             <div className="bg-white rounded-[1.5rem] p-8 text-center border border-gray-100 shadow-sm">
+               <Dumbbell size={40} className="mx-auto mb-3 text-gray-300" />
+               <p className="text-gray-400 font-bold mb-1 text-sm">尚無訓練紀錄</p>
+               <p className="text-xs text-gray-300">請先從首頁 AI 教練匯入訓記 App 的訓練紀錄</p>
+             </div>
+           ) : (
+             <div className="space-y-4">
+               {/* Frequency Card */}
+               <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100">
+                 <div className="flex items-center gap-3 mb-3">
+                   <div className="p-2 bg-brand-black text-brand-green rounded-full"><Dumbbell size={18} /></div>
+                   <h3 className="font-bold text-gray-800 text-sm">本週訓練頻率</h3>
+                 </div>
+                 <div className="flex items-end gap-2 mb-2">
+                   <span className="text-3xl font-black text-brand-black">{weeklyFreq}</span>
+                   <span className="text-gray-400 font-bold mb-1 text-xs">/ 5 次目標</span>
+                 </div>
+                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                   <div className="h-full bg-brand-green rounded-full transition-all duration-1000" style={{ width: `${Math.min((weeklyFreq/5)*100, 100)}%` }} />
+                 </div>
+               </div>
+
+               {/* Duration Chart */}
+               <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 h-56 flex flex-col">
+                 <h3 className="font-bold text-gray-800 mb-3 text-sm">本月訓練時長 (分)</h3>
+                 <div className="flex-1">
+                   <ResponsiveContainer width="100%" height="100%">
+                     <BarChart data={monthlyDurationData}>
+                       <XAxis dataKey="name" tick={{fontSize: 9}} axisLine={false} tickLine={false} />
+                       <Tooltip cursor={{fill: 'transparent'}} contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
+                       <Bar dataKey="minutes" fill="#111111" radius={[4,4,0,0]} barSize={18} />
+                     </BarChart>
+                   </ResponsiveContainer>
+                 </div>
+               </div>
+
+               {/* Muscle Pie */}
+               <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100 h-56 flex flex-col">
+                 <h3 className="font-bold text-gray-800 mb-3 text-sm">部位分佈</h3>
+                 <div className="flex-1 flex items-center justify-center">
+                   {muscleData.length > 0 ? (
+                     <ResponsiveContainer width="100%" height="100%">
+                       <PieChart>
+                         <Pie data={muscleData} innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                           {muscleData.map((entry, index) => (
+                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                           ))}
+                         </Pie>
+                         <Tooltip />
+                       </PieChart>
+                     </ResponsiveContainer>
+                   ) : (
+                     <p className="text-xs text-gray-400 font-bold">尚無數據</p>
+                   )}
+                 </div>
+               </div>
+
+               {/* Total Stats Card */}
+               <div className="bg-white p-5 rounded-[1.5rem] shadow-sm border border-gray-100">
+                 <div className="flex items-center gap-3 mb-3">
+                   <div className="p-2 bg-brand-green text-brand-black rounded-full"><TrendingUp size={18} /></div>
+                   <h3 className="font-bold text-gray-800 text-sm">累計訓練統計</h3>
+                 </div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="bg-gray-50 rounded-xl p-3">
+                     <p className="text-xs text-gray-400 font-bold mb-1">總訓練次數</p>
+                     <p className="text-xl font-black text-brand-black">{totalStats.totalWorkouts}</p>
+                   </div>
+                   <div className="bg-gray-50 rounded-xl p-3">
+                     <p className="text-xs text-gray-400 font-bold mb-1">總動作數</p>
+                     <p className="text-xl font-black text-brand-black">{totalStats.totalExercises}</p>
+                   </div>
+                   <div className="bg-gray-50 rounded-xl p-3">
+                     <p className="text-xs text-gray-400 font-bold mb-1">總重量</p>
+                     <p className="text-xl font-black text-brand-black">{Math.round(totalStats.totalWeight)}<span className="text-xs text-gray-400">kg</span></p>
+                   </div>
+                   <div className="bg-gray-50 rounded-xl p-3">
+                     <p className="text-xs text-gray-400 font-bold mb-1">總時長</p>
+                     <p className="text-xl font-black text-brand-black">{totalStats.totalDuration}<span className="text-xs text-gray-400">分</span></p>
+                   </div>
+                 </div>
+                 <p className="text-xs text-gray-400 font-bold mt-3 text-center">
+                   * 包含從訓記App匯入的訓練紀錄
+                 </p>
+               </div>
+             </div>
+           )}
+         </div>
+
+         {/* 分隔线 */}
+         <div className="border-t border-gray-200 my-6"></div>
 
          {/* API Key Section */}
          <div className="w-full bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-5">

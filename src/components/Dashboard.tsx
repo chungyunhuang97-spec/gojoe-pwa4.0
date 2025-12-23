@@ -86,6 +86,12 @@ export const Dashboard: React.FC = () => {
   const [isCameraOpen, setIsCameraOpen] = useState(false);
   const [cameraMode, setCameraMode] = useState<'food' | 'workout' | 'body'>('food');
   
+  // --- Carousel Swipe State ---
+  const carouselRef = useRef<HTMLDivElement>(null);
+  const touchStartX = useRef<number>(0);
+  const touchEndX = useRef<number>(0);
+  const isDragging = useRef<boolean>(false);
+  
   // Edit State
   const [editingLog, setEditingLog] = useState<LogEntry | null>(null);
 
@@ -105,11 +111,15 @@ export const Dashboard: React.FC = () => {
       }
   }, []);
 
-  const handleTrainingSet = (mode: TrainingMode) => {
-      setTrainingMode(mode);
-      localStorage.setItem('lastTrainingCheckDate', new Date().toDateString());
-      setShowTrainingModal(false);
-      addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
+  const handleTrainingSet = async (mode: TrainingMode) => {
+      try {
+          await setTrainingMode(mode);
+          localStorage.setItem('lastTrainingCheckDate', new Date().toDateString());
+          setShowTrainingModal(false);
+          addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
+      } catch (error) {
+          console.error('设置训练模式失败:', error);
+      }
   };
 
   // --- 2. Chat Persistence ---
@@ -642,94 +652,80 @@ export const Dashboard: React.FC = () => {
       addAiMessage(`系統通知：使用者刪除了 **${log.foodName}**。請更新今日剩餘熱量建議。`);
   };
 
-  return (
-    <div className="h-full flex flex-col relative bg-gray-50 overflow-hidden">
+  // --- Carousel Swipe Handlers ---
+  const handleTouchStart = (e: React.TouchEvent) => {
+      touchStartX.current = e.touches[0].clientX;
+      isDragging.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+      if (!isDragging.current) return;
+      touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+      if (!isDragging.current) return;
+      isDragging.current = false;
       
-      {/* 1. CAROUSEL - Nutrition & Budget */}
-      <div className="px-4 pt-4 pb-2 shrink-0">
-          <div className="relative overflow-hidden mb-4">
-              <div 
-                  className="flex transition-transform duration-300 ease-out"
-                  style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
-              >
-                  <div className="min-w-full">
-                      <NutritionOverview goals={goals} stats={todayStats} />
-                  </div>
-                  <div className="min-w-full">
-                      <BudgetCard goals={goals} stats={todayStats} />
-                  </div>
-              </div>
-              
-              {/* Carousel Indicators */}
-              <div className="flex justify-center gap-2 mt-3">
-                  <button 
-                      onClick={() => setCarouselIndex(0)}
-                      className={`w-2 h-2 rounded-full transition-all ${carouselIndex === 0 ? 'bg-brand-green w-6' : 'bg-gray-300'}`}
-                  />
-                  <button 
-                      onClick={() => setCarouselIndex(1)}
-                      className={`w-2 h-2 rounded-full transition-all ${carouselIndex === 1 ? 'bg-brand-green w-6' : 'bg-gray-300'}`}
-                  />
-              </div>
-          </div>
-      </div>
+      const swipeDistance = touchStartX.current - touchEndX.current;
+      const minSwipeDistance = 50; // 最小滑动距离
+      
+      if (Math.abs(swipeDistance) > minSwipeDistance) {
+          if (swipeDistance > 0) {
+              // 向右滑动，显示下一个（index + 1）
+              setCarouselIndex(prev => Math.min(prev + 1, 1));
+          } else {
+              // 向左滑动，显示上一个（index - 1）
+              setCarouselIndex(prev => Math.max(prev - 1, 0));
+          }
+      }
+      
+      // 重置
+      touchStartX.current = 0;
+      touchEndX.current = 0;
+  };
 
-      {/* 2. LISTS - 今日餐點與體態紀錄 */}
-      <div className="px-4 mb-4 space-y-6 shrink-0">
-          {/* Meals List */}
-          <div>
-              <h3 className="font-black text-lg text-gray-800 italic mb-3">今日餐點</h3>
-              <div className="space-y-3">
-                  {todayLogs.length === 0 ? (
-                       <div className="bg-white rounded-2xl p-6 text-center border border-dashed border-gray-200"><p className="text-xs font-bold text-gray-400">今天還沒吃東西？</p></div>
-                  ) : (
-                      todayLogs.slice().reverse().map((log: LogEntry) => (
-                          <div key={log.id} className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm relative group">
-                              <div className="flex items-center gap-4">
-                                  <div className={`w-2 h-10 rounded-full ${log.mealType === 'breakfast' ? 'bg-yellow-400' : log.mealType === 'lunch' ? 'bg-brand-green' : log.mealType === 'dinner' ? 'bg-blue-400' : 'bg-purple-400'}`} />
-                                  <div>
-                                      <h4 className="font-bold text-gray-800 text-sm">{log.foodName}</h4>
-                                      <div className="flex gap-2 text-[10px] text-gray-400 font-bold uppercase mt-1">
-                                          <span>P: {log.protein}</span><span>C: {log.carbs}</span><span>F: {log.fat}</span>
-                                      </div>
-                                  </div>
-                              </div>
-                              <div className="text-right mr-2">
-                                  <span className="block font-black text-brand-black text-lg">{log.calories}</span>
-                                  <span className="text-[9px] font-bold text-gray-400">KCAL</span>
-                              </div>
-                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button onClick={() => setEditingLog(log)} className="bg-gray-100 text-gray-500 p-1.5 rounded-full hover:bg-gray-200"><Edit3 size={14} /></button>
-                                  <button onClick={() => handleDeleteLog(log)} className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100"><Trash2 size={14} /></button>
-                              </div>
-                          </div>
-                      ))
-                  )}
-              </div>
-          </div>
-          {/* Body Log List */}
-          <div>
-               <div className="flex items-center justify-between mb-3">
-                   <h3 className="font-black text-lg text-gray-800 italic">體態紀錄</h3>
-                   <button onClick={() => { setCameraMode('body'); setIsCameraOpen(true); }} className="text-xs font-bold text-brand-green bg-brand-black px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"><Camera size={12} /> 新增</button>
-               </div>
-               {todayBodyLogs.length === 0 ? (
-                   <div className="bg-white rounded-2xl p-6 text-center border border-dashed border-gray-200"><p className="text-xs font-bold text-gray-400">今天還沒紀錄體態</p></div>
-               ) : (
-                   <div className="flex gap-3 overflow-x-auto no-scrollbar py-1">
-                       {todayBodyLogs.map((log: BodyLogEntry) => (
-                           <div key={log.id} className="relative w-24 h-32 flex-shrink-0 rounded-xl overflow-hidden shadow-sm group">
-                               <img src={log.imageUrl} className="w-full h-full object-cover" alt="Body" />
-                               <button onClick={() => deleteBodyLog(log.id)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={10} /></button>
-                           </div>
-                       ))}
-                   </div>
-               )}
-          </div>
-      </div>
+  return (
+    <div className="min-h-screen flex flex-col relative bg-gray-50">
+      {/* 固定区域：轮播 + AI教练，填满100vh */}
+      <div className="min-h-screen flex flex-col shrink-0">
+        {/* 1. CAROUSEL - Nutrition & Budget */}
+        <div className="px-4 pt-4 pb-2 shrink-0">
+            <div 
+                ref={carouselRef}
+                className="relative overflow-hidden mb-4 touch-pan-y"
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+            >
+                <div 
+                    className="flex transition-transform duration-300 ease-out"
+                    style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
+                >
+                    <div className="min-w-full">
+                        <NutritionOverview goals={goals} stats={todayStats} />
+                    </div>
+                    <div className="min-w-full">
+                        <BudgetCard goals={goals} stats={todayStats} />
+                    </div>
+                </div>
+                
+                {/* Carousel Indicators */}
+                <div className="flex justify-center gap-2 mt-3">
+                    <button 
+                        onClick={() => setCarouselIndex(0)}
+                        className={`w-2 h-2 rounded-full transition-all ${carouselIndex === 0 ? 'bg-brand-green w-6' : 'bg-gray-300'}`}
+                    />
+                    <button 
+                        onClick={() => setCarouselIndex(1)}
+                        className={`w-2 h-2 rounded-full transition-all ${carouselIndex === 1 ? 'bg-brand-green w-6' : 'bg-gray-300'}`}
+                    />
+                </div>
+            </div>
+        </div>
 
-      {/* 3. CHAT - AI教練 */}
-      <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 max-h-[60vh] sm:max-h-none overflow-hidden">
+        {/* 2. CHAT - AI教練 */}
+        <div className="px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden">
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
               <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -831,8 +827,62 @@ export const Dashboard: React.FC = () => {
                   <button onClick={handleSendMessage} disabled={!inputText.trim()} className="p-2 bg-brand-black text-brand-green rounded-full disabled:opacity-50"><ArrowUp size={18} strokeWidth={3} /></button>
               </div>
           </div>
+        </div>
       </div>
 
+      {/* 可滚动区域：今日餐點與體態紀錄 */}
+      <div className="px-4 py-6 pb-20 space-y-6 bg-gray-50">
+          {/* Meals List */}
+          <div>
+              <h3 className="font-black text-lg text-gray-800 italic mb-3">今日餐點</h3>
+              <div className="space-y-3">
+                  {todayLogs.length === 0 ? (
+                       <div className="bg-white rounded-2xl p-6 text-center border border-dashed border-gray-200"><p className="text-xs font-bold text-gray-400">今天還沒吃東西？</p></div>
+                  ) : (
+                      todayLogs.slice().reverse().map((log: LogEntry) => (
+                          <div key={log.id} className="bg-white p-4 rounded-2xl flex items-center justify-between border border-gray-100 shadow-sm relative group">
+                              <div className="flex items-center gap-4">
+                                  <div className={`w-2 h-10 rounded-full ${log.mealType === 'breakfast' ? 'bg-yellow-400' : log.mealType === 'lunch' ? 'bg-brand-green' : log.mealType === 'dinner' ? 'bg-blue-400' : 'bg-purple-400'}`} />
+                                  <div>
+                                      <h4 className="font-bold text-gray-800 text-sm">{log.foodName}</h4>
+                                      <div className="flex gap-2 text-[10px] text-gray-400 font-bold uppercase mt-1">
+                                          <span>P: {log.protein}</span><span>C: {log.carbs}</span><span>F: {log.fat}</span>
+                                      </div>
+                                  </div>
+                              </div>
+                              <div className="text-right mr-2">
+                                  <span className="block font-black text-brand-black text-lg">{log.calories}</span>
+                                  <span className="text-[9px] font-bold text-gray-400">KCAL</span>
+                              </div>
+                              <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => setEditingLog(log)} className="bg-gray-100 text-gray-500 p-1.5 rounded-full hover:bg-gray-200"><Edit3 size={14} /></button>
+                                  <button onClick={() => handleDeleteLog(log)} className="bg-red-50 text-red-500 p-1.5 rounded-full hover:bg-red-100"><Trash2 size={14} /></button>
+                              </div>
+                          </div>
+                      ))
+                  )}
+              </div>
+          </div>
+          {/* Body Log List */}
+          <div className="min-h-[120px]">
+               <div className="flex items-center justify-between mb-3">
+                   <h3 className="font-black text-lg text-gray-800 italic">體態紀錄</h3>
+                   <button onClick={() => { setCameraMode('body'); setIsCameraOpen(true); }} className="text-xs font-bold text-brand-green bg-brand-black px-3 py-1.5 rounded-full flex items-center gap-1 active:scale-95 transition-transform"><Camera size={12} /> 新增</button>
+               </div>
+               {todayBodyLogs.length === 0 ? (
+                   <div className="bg-white rounded-2xl p-6 text-center border border-dashed border-gray-200 min-h-[80px] flex items-center justify-center"><p className="text-xs font-bold text-gray-400">今天還沒紀錄體態</p></div>
+               ) : (
+                   <div className="flex gap-3 overflow-x-auto no-scrollbar py-1 min-h-[80px]">
+                       {todayBodyLogs.map((log: BodyLogEntry) => (
+                           <div key={log.id} className="relative w-24 h-32 flex-shrink-0 rounded-xl overflow-hidden shadow-sm group">
+                               <img src={log.imageUrl} className="w-full h-full object-cover" alt="Body" />
+                               <button onClick={() => deleteBodyLog(log.id)} className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={10} /></button>
+                           </div>
+                       ))}
+                   </div>
+               )}
+          </div>
+      </div>
 
       <TrainingCheckModal isOpen={showTrainingModal} onClose={handleTrainingSet} />
       
