@@ -48,6 +48,13 @@ const getMimeType = (base64String: string) => {
 
 // --- Daily Training Check Modal ---
 const TrainingCheckModal: React.FC<{ isOpen: boolean, onClose: (mode: TrainingMode) => void }> = ({ isOpen, onClose }) => {
+    // #region agent log
+    if (typeof window !== 'undefined') {
+        const tabBar = document.querySelector('[class*="fixed bottom-0"]');
+        const tabBarZIndex = tabBar ? window.getComputedStyle(tabBar as Element).zIndex : 'unknown';
+        fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:51',message:'TrainingCheckModal render',data:{isOpen,onCloseType:typeof onClose,tabBarZIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+    }
+    // #endregion
     if (!isOpen) return null;
     return (
         <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in" style={{ pointerEvents: 'auto' }}>
@@ -63,9 +70,18 @@ const TrainingCheckModal: React.FC<{ isOpen: boolean, onClose: (mode: TrainingMo
                         <button 
                             key={mode.id}
                             onClick={(e) => {
+                                // #region agent log
+                                fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:65',message:'Training mode button clicked',data:{modeId:mode.id,modeLabel:mode.label,onCloseType:typeof onClose},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                                // #endregion
                                 e.preventDefault();
                                 e.stopPropagation();
+                                // #region agent log
+                                fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:68',message:'Calling onClose callback',data:{modeId:mode.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                                // #endregion
                                 onClose(mode.id as TrainingMode);
+                                // #region agent log
+                                fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:70',message:'onClose callback completed',data:{modeId:mode.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                                // #endregion
                             }}
                             className={`w-full p-4 rounded-2xl flex items-center gap-4 active:scale-95 transition-transform ${mode.color} font-bold text-lg cursor-pointer`}
                             style={{ pointerEvents: 'auto' }}
@@ -117,12 +133,33 @@ export const Dashboard: React.FC = () => {
   }, []);
 
   const handleTrainingSet = async (mode: TrainingMode) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:119',message:'handleTrainingSet called',data:{mode,showTrainingModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       try {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:121',message:'Before setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
           await setTrainingMode(mode);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:123',message:'After setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
           localStorage.setItem('lastTrainingCheckDate', new Date().toDateString());
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:124',message:'Before setShowTrainingModal(false)',data:{showTrainingModal},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
           setShowTrainingModal(false);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:125',message:'After setShowTrainingModal(false)',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+          // #endregion
           addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:126',message:'handleTrainingSet completed successfully',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
       } catch (error) {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:127',message:'handleTrainingSet error',data:{mode,error:error instanceof Error ? error.message : String(error),errorStack:error instanceof Error ? error.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
           console.error('设置训练模式失败:', error);
       }
   };

@@ -513,28 +513,28 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // CRITICAL DATA SAFETY LOGIC: Check if document exists FIRST
           // The UID should be the same for the same Google account across all devices
           const userDocRef = doc(db, "users", user.uid);
-          const docSnap = await getDoc(userDocRef);
+      const docSnap = await getDoc(userDocRef);
       
           // IF NOT Exists: Only then create the default profile (initialize data)
-          if (!docSnap.exists()) {
+      if (!docSnap.exists()) {
               console.log('Creating new user document for:', user.uid);
               // Extract display name from Google account
               const displayName = user.displayName || user.email?.split('@')[0] || 'Joe';
               const avatar = user.photoURL || undefined;
               
-              await setDoc(userDocRef, {
+          await setDoc(userDocRef, {
                   profile: { 
                       ...DEFAULT_PROFILE, 
                       displayName,
                       avatar
                   }, 
-                  goals: DEFAULT_GOALS,
-                  logs: [],
-                  bodyLogs: [],
-                  workoutLogs: [],
-                  hasCompletedOnboarding: false,
-                  trainingMode: 'rest'
-              });
+              goals: DEFAULT_GOALS,
+              logs: [],
+              bodyLogs: [],
+              workoutLogs: [],
+              hasCompletedOnboarding: false,
+              trainingMode: 'rest'
+          });
               
               console.log('User document created successfully');
           } else {
@@ -774,8 +774,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const setTrainingMode = async (mode: TrainingMode) => {
-      await saveData({ trainingMode: mode });
-      await recalculateTargets(state.profile, mode);
+      // #region agent log
+      fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:776',message:'setTrainingMode called',data:{mode,currentTrainingMode:state.trainingMode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
+      try {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:777',message:'Before saveData call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          await saveData({ trainingMode: mode });
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:778',message:'After saveData call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:779',message:'Before recalculateTargets call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+          await recalculateTargets(state.profile, mode);
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:780',message:'setTrainingMode completed',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+          // #endregion
+      } catch (error) {
+          // #region agent log
+          fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'UserContext.tsx:781',message:'setTrainingMode error',data:{mode,error:error instanceof Error ? error.message : String(error),errorStack:error instanceof Error ? error.stack : undefined},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+          // #endregion
+          throw error;
+      }
   };
 
   return (
