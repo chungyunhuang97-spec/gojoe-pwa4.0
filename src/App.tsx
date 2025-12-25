@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { UserProvider, useUser } from './context/UserContext';
+import { CameraProvider, useCamera } from './context/CameraContext';
 import { History as HistoryIcon, Home, User, Settings, ChevronRight } from 'lucide-react';
 
 // Lazy load components for better initial load performance
@@ -112,6 +113,7 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
 
 const MainApp: React.FC = () => {
   const { user, hasCompletedOnboarding, profile, authLoading } = useUser();
+  const { isCameraOpen } = useCamera();
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [hasApiKey, setHasApiKey] = useState(false);
 
@@ -204,13 +206,15 @@ const MainApp: React.FC = () => {
     <div className="h-screen bg-gray-100 sm:py-8 sm:px-4 flex justify-center items-start overflow-hidden">
       <div className="w-full sm:max-w-[420px] bg-white h-screen sm:h-[90vh] sm:rounded-[2.5rem] shadow-2xl relative overflow-hidden flex flex-col font-nunito border border-gray-200/50">
         
-        <header className="px-5 pt-12 pb-2 flex justify-center items-center bg-white/95 backdrop-blur-md sticky top-0 z-50 shrink-0 border-b border-gray-100/50">
-          <h1 className="text-2xl font-black tracking-tight italic select-none text-brand-black leading-none">
-            GO JOE<span className="text-brand-green">!</span>
-          </h1>
-        </header>
+        {!isCameraOpen && (
+          <header className="px-5 pt-4 sm:pt-12 pb-2 flex justify-center items-center bg-white/95 backdrop-blur-md sticky top-0 z-50 shrink-0 border-b border-gray-100/50">
+            <h1 className="text-2xl font-black tracking-tight italic select-none text-brand-black leading-none">
+              GO JOE<span className="text-brand-green">!</span>
+            </h1>
+          </header>
+        )}
 
-        <main className="flex-1 overflow-y-auto relative z-0 flex flex-col min-h-0 pb-20 sm:pb-20">
+        <main className={`flex-1 overflow-y-auto relative z-0 flex flex-col min-h-0 ${isCameraOpen ? 'pb-0' : 'pb-20 sm:pb-20'}`}>
           <Suspense fallback={<LoadingFallback />}>
             {currentView === 'dashboard' && <Dashboard />}
             {/* 訓練記錄功能已整合到首頁AI教練中，此頁面已移除 */}
@@ -222,7 +226,7 @@ const MainApp: React.FC = () => {
           </Suspense>
         </main>
 
-        <TabBar currentView={currentView} onViewChange={setCurrentView} />
+        {!isCameraOpen && <TabBar currentView={currentView} onViewChange={setCurrentView} />}
       </div>
     </div>
   );
@@ -231,7 +235,9 @@ const MainApp: React.FC = () => {
 const App: React.FC = () => {
   return (
     <UserProvider>
-      <MainApp />
+      <CameraProvider>
+        <MainApp />
+      </CameraProvider>
     </UserProvider>
   );
 };

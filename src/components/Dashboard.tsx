@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Camera, ArrowUp, Zap, Dumbbell, BedDouble, Trash2, Edit3, ChevronDown, BarChart2 } from 'lucide-react';
 import { useUser, TrainingMode, MealType, LogEntry, BodyLogEntry } from '../context/UserContext';
+import { useCamera } from '../context/CameraContext';
 import { NutritionOverview } from './NutritionOverview';
 import { BudgetCard } from './BudgetCard';
 import { CameraModal } from './CameraModal';
@@ -104,7 +105,7 @@ export const Dashboard: React.FC = () => {
   // --- UI State ---
   const [carouselIndex, setCarouselIndex] = useState(0); // 0 = status, 1 = budget
   const [showTrainingModal, setShowTrainingModal] = useState(false);
-  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const { isCameraOpen, setIsCameraOpen } = useCamera();
   const [cameraMode, setCameraMode] = useState<'food' | 'workout' | 'body'>('food');
   
   // --- Carousel Swipe State ---
@@ -147,7 +148,7 @@ export const Dashboard: React.FC = () => {
           // #region agent log
           fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:142',message:'After setTrainingMode call',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
           // #endregion
-          addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
+      addAiMessage(`早安！已為你設定為 **${mode === 'leg' ? '腿日模式 (高碳水)' : mode === 'push_pull' ? '推拉模式 (高蛋白)' : '休息模式 (低熱量)'}**。請回報你的第一餐。`);
           // #region agent log
           fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Dashboard.tsx:144',message:'handleTrainingSet completed successfully',data:{mode},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
           // #endregion
@@ -170,13 +171,13 @@ export const Dashboard: React.FC = () => {
           setMessages(JSON.parse(saved));
       } else {
           if (coachMode === 'diet') {
-              setMessages([{
-                  id: 'init-1',
-                  sender: 'ai',
-                  type: 'text',
-                  content: `你的目標是 **${goals.targetCalories} kcal**。請回報餐點。`,
-                  options: ['排骨便當', '地瓜 200g', '無糖豆漿']
-              }]);
+          setMessages([{
+              id: 'init-1',
+              sender: 'ai',
+              type: 'text',
+              content: `你的目標是 **${goals.targetCalories} kcal**。請回報餐點。`,
+              options: ['排骨便當', '地瓜 200g', '無糖豆漿']
+          }]);
           } else {
               setMessages([{
                   id: 'init-1',
@@ -254,7 +255,7 @@ export const Dashboard: React.FC = () => {
           const carbsPercent = Math.round((todayStats.consumedCarbs / goals.targetCarbs) * 100);
           const fatPercent = Math.round((todayStats.consumedFat / goals.targetFat) * 100);
           const caloriesPercent = Math.round((todayStats.consumedCalories / goals.targetCalories) * 100);
-          
+
           const systemInstruction = `
           你是【NutriMax - 精準營養大師】，一位頂級營養與體態轉變教練。你的職責是分析用戶上傳的食物照片或文字紀錄。
 
@@ -288,7 +289,7 @@ export const Dashboard: React.FC = () => {
           2. 若資訊不足 (如只輸入「便當」)，回傳 "is_sufficient": false，並提供具體的詢問選項。
           3. 若資訊足夠，直接分析營養素並給出完整的教練回饋。
           4. 如果用戶問訓練相關問題，根據上述訓練狀態回答，並結合飲食建議。
-
+          
           JSON Schema:
           {
             "is_sufficient": boolean,
@@ -576,7 +577,7 @@ export const Dashboard: React.FC = () => {
       setInputText('');
       
       if (coachMode === 'diet') {
-          analyzeWithGemini(text);
+      analyzeWithGemini(text);
       } else {
           // Training coach mode
           handleTrainingCoachMessage(text);
@@ -725,11 +726,11 @@ export const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col relative bg-gray-50">
+    <div className="h-screen flex flex-col relative bg-gray-50 overflow-hidden">
       {/* 固定区域：轮播 + AI教练，填满100vh */}
-      <div className="min-h-screen flex flex-col shrink-0">
+      <div className="flex flex-col shrink-0 h-screen">
         {/* 1. CAROUSEL - Nutrition & Budget */}
-        <div className="px-4 pt-4 pb-2 shrink-0">
+        <div className="px-4 pt-4 pb-2 shrink-0" style={{ maxHeight: '40vh' }}>
             <div 
                 ref={carouselRef}
                 className="relative overflow-hidden mb-4 touch-pan-y"
@@ -759,13 +760,13 @@ export const Dashboard: React.FC = () => {
                         onClick={() => setCarouselIndex(1)}
                         className={`w-2 h-2 rounded-full transition-all ${carouselIndex === 1 ? 'bg-brand-green w-6' : 'bg-gray-300'}`}
                     />
-                </div>
-            </div>
-        </div>
+          </div>
+          </div>
+      </div>
 
         {/* 2. CHAT - AI教練 */}
-        <div className="px-2 sm:px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ minHeight: '60vh' }}>
-          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0">
+        <div className="px-2 sm:px-4 pb-4 flex-1 flex flex-col min-h-0 overflow-hidden" style={{ maxHeight: '60vh', minHeight: 0 }}>
+          <div className="bg-white rounded-[1.5rem] sm:rounded-[2rem] shadow-sm border border-gray-200 overflow-hidden flex flex-col flex-1 min-h-0 max-h-full">
               <div className="px-3 sm:px-4 py-2 sm:py-3 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between gap-2">
                   <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0"></div>
@@ -773,10 +774,10 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                       {/* Coach Mode Tabs */}
-                      <div className="flex bg-white p-0.5 sm:p-1 rounded-full border border-gray-200">
+                      <div className="flex bg-white p-1 sm:p-1.5 rounded-full border border-gray-200">
                           <button 
                               onClick={() => setCoachMode('diet')}
-                              className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
+                              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${
                                   coachMode === 'diet' 
                                       ? 'bg-brand-green text-brand-black' 
                                       : 'text-gray-400 hover:text-gray-600'
@@ -786,7 +787,7 @@ export const Dashboard: React.FC = () => {
                           </button>
                           <button 
                               onClick={() => setCoachMode('training')}
-                              className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-[10px] font-bold transition-all ${
+                              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-bold transition-all ${
                                   coachMode === 'training' 
                                       ? 'bg-brand-green text-brand-black' 
                                       : 'text-gray-400 hover:text-gray-600'
@@ -806,7 +807,7 @@ export const Dashboard: React.FC = () => {
                           <button onClick={handleImportWorkout} className="flex items-center gap-1 text-[9px] sm:text-[10px] text-brand-black font-bold bg-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-gray-200 hover:border-brand-green shadow-sm active:scale-95 transition-all">
                               <Upload size={10} className="sm:w-3 sm:h-3" />
                               <span className="hidden sm:inline">匯入</span>
-                          </button>
+                  </button>
                       )}
                   </div>
               </div>
@@ -878,8 +879,8 @@ export const Dashboard: React.FC = () => {
                     <ArrowUp size={16} strokeWidth={3} className="sm:w-[18px] sm:h-[18px]" />
                   </button>
               </div>
+              </div>
           </div>
-        </div>
       </div>
 
       {/* 可滚动区域：今日餐點與體態紀錄 */}
@@ -937,7 +938,7 @@ export const Dashboard: React.FC = () => {
       </div>
 
       <TrainingCheckModal isOpen={showTrainingModal} onClose={handleTrainingSet} />
-      
+
       <CameraModal 
           isOpen={isCameraOpen} 
           onClose={() => setIsCameraOpen(false)} 
@@ -947,8 +948,10 @@ export const Dashboard: React.FC = () => {
               : '檢查動作姿勢'
           }
           onCapture={(base64: string) => {
+              // 立即关闭相机，避免画面空白
               setIsCameraOpen(false);
-              setTimeout(() => {
+              // 使用 requestAnimationFrame 确保 DOM 更新后再处理图片
+              requestAnimationFrame(() => {
                 if (coachMode === 'diet') {
                     // 饮食教练：分析食物
                     analyzeWithGemini("分析這張食物照片", base64);
@@ -956,7 +959,7 @@ export const Dashboard: React.FC = () => {
                     // 训练教练：检查动作姿势
                     analyzeWorkoutForm(base64);
                 }
-              }, 100);
+              });
           }}
       />
     </div>

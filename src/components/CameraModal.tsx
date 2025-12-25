@@ -9,9 +9,15 @@ interface CameraModalProps {
 }
 
 export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCapture, label }) => {
+  const { setIsCameraOpen } = useCamera();
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+
+  // 同步相机状态到 Context
+  useEffect(() => {
+    setIsCameraOpen(isOpen);
+  }, [isOpen, setIsCameraOpen]);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -80,15 +86,14 @@ export const CameraModal: React.FC<CameraModalProps> = ({ isOpen, onClose, onCap
 
   return (
     <div className="fixed inset-0 z-[100] bg-black flex flex-col animate-fade-in h-full w-full">
-      {/* Top Bar */}
-      <div className="absolute top-0 w-full p-6 flex justify-between items-center z-20">
-        <button onClick={onClose} className="p-2 bg-black/50 backdrop-blur text-white rounded-full">
-          <X />
+      {/* Top Bar - 右上角关闭按钮 */}
+      <div className="absolute top-4 right-4 z-50">
+        <button 
+          onClick={onClose} 
+          className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors shadow-lg"
+        >
+          <X size={24} strokeWidth={2.5} />
         </button>
-        <span className="text-white font-bold tracking-widest text-sm">
-          {label || 'SCANNER'}
-        </span>
-        <div className="w-10"></div> 
       </div>
 
       {/* Camera Viewfinder */}

@@ -183,31 +183,39 @@ export const Profile: React.FC = () => {
       if (isSaving) return; // 防止重复保存
 
       setIsSaving(true);
+      
+      // 乐观更新：立即关闭编辑模式，提供即时反馈
+      setIsEditing(false);
+      
       try {
           console.log('开始保存个人资料:', editForm);
 
-          // 并行执行更新和重新计算，减少等待时间
-          await Promise.all([
+          // 后台并行执行更新和重新计算，不阻塞 UI
+          Promise.all([
               updateProfile(editForm),
               recalculateTargets(editForm)
-          ]);
-          console.log('Profile 和 Goals 保存完成');
-          
-          // 关闭编辑模式
-          setIsEditing(false);
-          
-          // 显示成功提示
-          const successMsg = document.createElement('div');
-          successMsg.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-brand-green text-brand-black px-4 py-2 rounded-full font-bold text-sm z-50 shadow-lg animate-fade-in';
-          successMsg.textContent = '✅ 已儲存';
-          document.body.appendChild(successMsg);
-          setTimeout(() => {
-              successMsg.style.opacity = '0';
-              successMsg.style.transition = 'opacity 0.3s';
-              setTimeout(() => successMsg.remove(), 300);
-          }, 2000);
+          ]).then(() => {
+              console.log('Profile 和 Goals 保存完成');
+              
+              // 显示成功提示
+              const successMsg = document.createElement('div');
+              successMsg.className = 'fixed top-20 left-1/2 transform -translate-x-1/2 bg-brand-green text-brand-black px-4 py-2 rounded-full font-bold text-sm z-50 shadow-lg animate-fade-in';
+              successMsg.textContent = '✅ 已儲存';
+              document.body.appendChild(successMsg);
+              setTimeout(() => {
+                  successMsg.style.opacity = '0';
+                  successMsg.style.transition = 'opacity 0.3s';
+                  setTimeout(() => successMsg.remove(), 300);
+              }, 2000);
+          }).catch((error: any) => {
+              console.error('保存个人资料失败:', error);
+              // 如果失败，恢复编辑状态
+              setIsEditing(true);
+              alert(`保存失败: ${error.message || '请检查网络连接或重试'}`);
+          });
       } catch (error: any) {
           console.error('保存个人资料失败:', error);
+          setIsEditing(true); // 恢复编辑状态
           alert(`保存失败: ${error.message || '请检查网络连接或重试'}`);
       } finally {
           setIsSaving(false);
@@ -628,6 +636,22 @@ export const Profile: React.FC = () => {
                  </button>
              </div>
              
+             {!hasCustomKey && (
+                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-4 animate-fade-in">
+                     <p className="text-xs font-bold text-blue-800 mb-2">需要 API Key？</p>
+                     <a 
+                         href="https://aistudio.google.com/apikey" 
+                         target="_blank" 
+                         rel="noopener noreferrer"
+                         className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors active:scale-95"
+                     >
+                         <Key size={14} />
+                         <span>前往 Google AI Studio 取得 API Key</span>
+                         <ChevronRight size={14} />
+                     </a>
+                 </div>
+             )}
+             
              {showKeyInput && (
                  <div className="animate-fade-in bg-gray-50 p-4 rounded-xl">
                      <input 
@@ -675,7 +699,7 @@ export const Profile: React.FC = () => {
       </div>
 
       {/* Footer Version */}
-      <div className="text-center pb-24">
+      <div className="text-center pb-3">
           <p className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">Go Joe! v1.5.0</p>
       </div>
 

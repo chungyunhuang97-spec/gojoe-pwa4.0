@@ -516,13 +516,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const docSnap = await getDoc(userDocRef);
       
           // IF NOT Exists: Only then create the default profile (initialize data)
+          // 使用 setDoc 但不 await，让它在后台完成，不阻塞 UI
       if (!docSnap.exists()) {
               console.log('Creating new user document for:', user.uid);
               // Extract display name from Google account
               const displayName = user.displayName || user.email?.split('@')[0] || 'Joe';
               const avatar = user.photoURL || undefined;
               
-          await setDoc(userDocRef, {
+          // 后台创建文档，不阻塞登入流程
+          setDoc(userDocRef, {
                   profile: { 
                       ...DEFAULT_PROFILE, 
                       displayName,
@@ -534,9 +536,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
               workoutLogs: [],
               hasCompletedOnboarding: false,
               trainingMode: 'rest'
+          }).catch(err => {
+              console.error('Background user document creation error:', err);
           });
               
-              console.log('User document created successfully');
+              console.log('User document creation initiated (background)');
           } else {
               console.log('User document already exists, loading existing data');
           }
