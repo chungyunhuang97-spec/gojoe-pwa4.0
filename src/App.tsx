@@ -112,8 +112,17 @@ const PlaceholderView: React.FC<{ title: string }> = ({ title }) => (
 );
 
 const MainApp: React.FC = () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:114',message:'MainApp rendering',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+  // #endregion
   const { user, hasCompletedOnboarding, profile, authLoading } = useUser();
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:116',message:'useUser hook called',data:{hasUser:!!user,authLoading},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+  // #endregion
   const { isCameraOpen } = useCamera();
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:117',message:'useCamera hook called in MainApp',data:{isCameraOpen},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+  // #endregion
   const [currentView, setCurrentView] = useState<ViewType>('dashboard');
   const [hasApiKey, setHasApiKey] = useState(false);
 
@@ -233,6 +242,9 @@ const MainApp: React.FC = () => {
 };
 
 const App: React.FC = () => {
+  // #region agent log
+  fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'App.tsx:236',message:'App component rendering',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   return (
     <UserProvider>
       <CameraProvider>

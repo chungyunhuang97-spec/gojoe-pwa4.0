@@ -30,6 +30,9 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+// #region agent log
+fetch('http://127.0.0.1:7244/ingest/f343e492-48dd-40e8-b51e-7315ed002144',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'main.tsx:32',message:'ReactDOM.render called',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+// #endregion
 root.render(
   <React.StrictMode>
     <App />
