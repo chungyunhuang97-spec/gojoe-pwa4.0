@@ -438,22 +438,22 @@ export const Dashboard: React.FC = () => {
             ? `\n上週同期訓練：${lastWeekWorkout.bodyParts.join(', ')}，總重量：${lastWeekWorkout.exercises.reduce((sum, e) => sum + (e.weight * e.reps * e.sets), 0)}kg`
             : '\n（無上週同期數據可對比）';
           
-          const prompt = `請以【IronLogic - 鋼鐵意志分析官】的身份檢討這次訓練。
+          const prompt = `【訓練記錄檢討 - 簡短模式】
 
-          ${workoutSummary}
-          ${comparisonText}
-          
-          今日飲食狀況：
-          - 熱量：${todayStats.consumedCalories}/${goals.targetCalories} kcal
-          - 蛋白質：${todayStats.consumedProtein}/${goals.targetProtein}g
-          - 碳水：${todayStats.consumedCarbs}/${goals.targetCarbs}g
-          
-          請提供：
-          1. 本次訓練強度分析
-          2. 對比上週進展（漸進式超負荷檢核）
-          3. 教練督促/鼓勵語
-          4. 下次訓練重點建議
-          5. 根據今日訓練強度，給出營養補充建議（結合飲食教練數據）`;
+${workoutSummary}
+${comparisonText}
+
+今日飲食狀況：
+- 熱量：${todayStats.consumedCalories}/${goals.targetCalories} kcal
+- 蛋白質：${todayStats.consumedProtein}/${goals.targetProtein}g
+- 碳水：${todayStats.consumedCarbs}/${goals.targetCarbs}g
+
+請用 2-3 句話提供：
+1. 訓練強度評估（與上週對比，如有數據）
+2. 一個具體改進建議（動作、重量或組數）
+3. 營養補充建議（基於今日訓練強度與飲食狀況）
+
+要求：簡潔、具體、用數字說話。不要廢話，不要重複說明。`;
 
           const res = await aiCoach.sendMessage(prompt, undefined, [], context);
           setIsTyping(false);
@@ -487,6 +487,11 @@ export const Dashboard: React.FC = () => {
           const systemInstruction = `
           你是【IronLogic - 鋼鐵意志分析官】，一位專精於運動科學、肌肥大與力量訓練的首席教練。
 
+          【CRITICAL LANGUAGE RULE (MANDATORY)】
+          - 必須 100% 使用繁體中文回應
+          - 絕對不要使用英文，除非是技術術語（如 RPE、RIR）
+          - 如果發現自己寫英文，立即停止並翻譯成繁體中文
+
           【核心性格】
           硬派、數據驅動、嚴謹、具有遠瞻性。你對偷懶行為零容忍，對進步極度讚賞。
 
@@ -497,19 +502,16 @@ export const Dashboard: React.FC = () => {
           【任務指令】
           1. **動作姿勢分析**：仔細分析這張訓練動作照片，檢查姿勢正確性、關節角度、動作軌跡。
           2. **安全性監控**：識別潛在的安全風險（如：下背過度彎曲、肩關節不穩定、膝蓋內扣等）。
-          3. **即時修正建議**：提供具體、可執行的調整建議，包括：
-             - 身體姿勢調整
-             - 動作幅度優化
-             - 呼吸節奏
-             - 替代動作（如果原動作不適合）
+          3. **即時修正建議**：提供具體、可執行的調整建議（姿勢調整、動作幅度、呼吸節奏、替代動作）。
           4. **訓練聯動**：如果今日有訓練紀錄，結合訓練內容給出針對性建議。
-          5. **營養提醒**：如果動作強度高，提醒用戶注意營養補充（特別是蛋白質和碳水）。
+          5. **營養提醒**：如果動作強度高，簡要提醒營養補充重點。
 
           【輸出要求】
           - 用專業但易懂的方式回覆
-          - 使用繁體中文
+          - 必須使用繁體中文（100%）
           - 結構化呈現：姿勢分析 → 安全警告 → 修正建議 → 進階提示
           - 語氣要硬派但具建設性，對錯誤要嚴厲指出，對正確要大力讚賞
+          - 保持簡潔，避免冗長說明
           `;
 
           const cleanBase64 = imageBase64.split(',')[1] || imageBase64;
@@ -609,7 +611,12 @@ export const Dashboard: React.FC = () => {
               ? `今日訓練：${todayWorkout.bodyParts.join(', ')} (${todayWorkout.duration}分鐘)，動作數：${todayWorkout.exercises.length}。`
               : "今日尚未紀錄訓練。";
 
-          const fullPrompt = `${message}\n\n背景資訊：${workoutContext} 今日飲食：${todayStats.consumedCalories}/${goals.targetCalories} kcal，蛋白質：${todayStats.consumedProtein}/${goals.targetProtein}g。`;
+          const fullPrompt = `${message}
+
+背景資訊：${workoutContext}
+今日飲食：${todayStats.consumedCalories}/${goals.targetCalories} kcal，蛋白質：${todayStats.consumedProtein}/${goals.targetProtein}g。
+
+請簡潔回答，用繁體中文。`;
 
           const res = await aiCoach.sendMessage(fullPrompt, undefined, [], context);
           setIsTyping(false);
